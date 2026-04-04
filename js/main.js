@@ -10,6 +10,7 @@ import { Renderer } from './renderer.js';
 import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { cAbs } from './hyperbolic-math.js';
+import { loadFromFile, loadFromUrl, saveToFile, setupDragDrop } from './file-io.js';
 
 class App {
   constructor() {
@@ -24,14 +25,30 @@ class App {
     this.step = 0.9;
     this.transformFn = z => z;
     this.showSiblings = false;
+    this._viewInitialized = false;
   }
 
   async init() {
-    const response = await fetch('horst_bob.ged');
-    const text = await response.text();
-    this.data = parseGedcom(text);
+    // Setup view first
+    this._initView();
 
-    console.log(`Parsed: ${this.data.individuals.size} Personen, ${this.data.families.size} Familien`);
+    // Setup file I/O UI
+    this._setupFileIO();
+
+    // Try loading default file
+    try {
+      const response = await fetch('horst_bob.ged');
+      const text = await response.text();
+      this.loadData(parseGedcom(text));
+    } catch (err) {
+      console.log('No default GEDCOM found, showing load dialog');
+      this._showLoadDialog();
+    }
+  }
+
+  _initView() {
+    if (this._viewInitialized) return;
+    this._viewInitialized = true;
 
     const container = document.getElementById('canvas-container');
     const svg = document.getElementById('hyperbolic-svg');
@@ -49,8 +66,140 @@ class App {
       this.render();
     });
 
-    const startId = this.data.homePersonId || this.data.individuals.keys().next().value;
-    this.selectPerson(startId);
+    // Drag&drop on canvas
+    setupDragDrop(container, (data) => this.loadData(data));
+  }
+
+  /**
+   * Load parsed GEDCOM data and initialize the view.
+   */
+  loadData(data) {
+    this.data = data;
+    console.log(`Parsed: ${data.individuals.size} Personen, ${data.families.size} Familien (GEDCOM ${data.version || '5.5.1'})`);
+
+    const startId = data.homePersonId || data.individuals.keys().next().value;
+    if (startId) {
+      this.selectPerson(startId);
+    }
+  }
+
+  /**
+   * Export current data as GEDCOM file.
+   */
+  exportData(version, filename) {
+    if (!this.data) return;
+    saveToFile(this.data, version, filename);
+  }
+
+  _setupFileIO() {
+    // Load dialog
+    const loadOverlay = document.getElementById('load-overlay');
+    const loadBtn = document.getElementById('load-btn');
+    const loadCloseBtn = document.getElementById('load-close-btn');
+    const fileInput = document.getElementById('file-input');
+    const urlInput = document.getElementById('url-input');
+    const urlLoadBtn = document.getElementById('url-load-btn');
+    const loadStatus = document.getElementById('load-status');
+    const dropZone = document.getElementById('drop-zone');
+
+    loadBtn.addEventListener('click', () => this._showLoadDialog());
+
+    loadCloseBtn.addEventListener('click', () => {
+      loadOverlay.style.display = 'none';
+    });
+
+    loadOverlay.addEventListener('click', (e) => {
+      if (e.target === loadOverlay) loadOverlay.style.display = 'none';
+    });
+
+    // File input
+    fileInput.addEventListener('change', async () => {
+      if (fileInput.files.length === 0) return;
+      loadStatus.textContent = 'Lade...';
+      try {
+        const data = await loadFromFile(fileInput.files[0]);
+        this.loadData(data);
+        loadOverlay.style.display = 'none';
+        loadStatus.textContent = '';
+      } catch (err) {
+        loadStatus.textContent = 'Fehler: ' + err.message;
+      }
+    });
+
+    // URL load
+    urlLoadBtn.addEventListener('click', async () => {
+      const url = urlInput.value.trim();
+      if (!url) return;
+      loadStatus.textContent = 'Lade von URL...';
+      try {
+        const data = await loadFromUrl(url);
+        this.loadData(data);
+        loadOverlay.style.display = 'none';
+        loadStatus.textContent = '';
+      } catch (err) {
+        loadStatus.textContent = 'Fehler: ' + err.message;
+      }
+    });
+
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') urlLoadBtn.click();
+    });
+
+    // Drop zone in dialog
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const files = e.dataTransfer.files;
+      if (files.length > 0 && files[0].name.toLowerCase().endsWith('.ged')) {
+        loadStatus.textContent = 'Lade...';
+        try {
+          const data = await loadFromFile(files[0]);
+          this.loadData(data);
+          loadOverlay.style.display = 'none';
+        } catch (err) {
+          loadStatus.textContent = 'Fehler: ' + err.message;
+        }
+      }
+    });
+
+    // Save dialog
+    const saveOverlay = document.getElementById('save-overlay');
+    const saveBtn = document.getElementById('save-btn');
+    const saveCloseBtn = document.getElementById('save-close-btn');
+    const saveDownloadBtn = document.getElementById('save-download-btn');
+    const saveFormat = document.getElementById('save-format');
+    const saveFilename = document.getElementById('save-filename');
+
+    saveBtn.addEventListener('click', () => {
+      saveOverlay.style.display = 'flex';
+    });
+
+    saveCloseBtn.addEventListener('click', () => {
+      saveOverlay.style.display = 'none';
+    });
+
+    saveOverlay.addEventListener('click', (e) => {
+      if (e.target === saveOverlay) saveOverlay.style.display = 'none';
+    });
+
+    saveDownloadBtn.addEventListener('click', () => {
+      const version = saveFormat.value;
+      const filename = saveFilename.value.trim() || 'ahnentafel.ged';
+      this.exportData(version, filename);
+      saveOverlay.style.display = 'none';
+    });
+  }
+
+  _showLoadDialog() {
+    document.getElementById('load-overlay').style.display = 'flex';
+    document.getElementById('load-status').textContent = '';
   }
 
   toggleSiblings() {
@@ -64,15 +213,13 @@ class App {
     if (!this.tree) return;
     this.flatTree = flattenTree(this.tree, this.data.individuals, this.data.families);
     this.positions = layoutTree(this.tree, this.step);
-
-    // Layout sibling nodes near their connected tree node
     if (this.flatTree.siblingNodes.length > 0) {
       layoutSiblings(this.flatTree, this.positions);
     }
   }
 
   selectPerson(personId, resetView = true) {
-    if (!this.data.individuals.has(personId)) return;
+    if (!this.data || !this.data.individuals.has(personId)) return;
 
     this.currentRootId = personId;
     this.tree = buildTree(personId, this.data.individuals, this.data.families);
@@ -96,7 +243,6 @@ class App {
     let closestId = null;
     let closestDist = Infinity;
 
-    // Only consider tree nodes (not siblings) for center detection
     for (const node of this.flatTree.nodes) {
       const diskPos = this.positions.get(node.id);
       if (!diskPos) continue;
@@ -146,7 +292,7 @@ class App {
   adjustStep(delta) {
     this.step = Math.max(0.3, Math.min(2.0, this.step + delta));
     this.positions = layoutTree(this.tree, this.step);
-    if (this.flatTree.siblingNodes.length > 0) {
+    if (this.flatTree && this.flatTree.siblingNodes.length > 0) {
       layoutSiblings(this.flatTree, this.positions);
     }
     this.render();
@@ -155,7 +301,6 @@ class App {
   render() {
     if (!this.flatTree || !this.positions) return;
 
-    // Combine tree nodes + sibling nodes
     const allNodes = [...this.flatTree.nodes, ...this.flatTree.siblingNodes];
 
     this.renderer.render(

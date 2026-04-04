@@ -1,9 +1,30 @@
 /**
- * GEDCOM 5.5.1 Parser
- * Parses raw GEDCOM text into individuals and families maps.
+ * GEDCOM Parser
+ * Parses GEDCOM 5.5.1 and 7.0 text into individuals and families maps.
+ * Auto-detects version from header.
  */
 
+/**
+ * Detect GEDCOM version from text.
+ * @returns {'7.0'|'5.5.1'}
+ */
+export function detectVersion(text) {
+  // Look for version in first ~50 lines
+  const headerLines = text.split(/\r?\n/).slice(0, 50);
+  for (const line of headerLines) {
+    const trimmed = line.trim();
+    if (/^2\s+VERS\s+7/i.test(trimmed)) return '7.0';
+    if (/^2\s+VERS\s+5/i.test(trimmed)) return '5.5.1';
+  }
+  return '5.5.1'; // default
+}
+
+/**
+ * Parse GEDCOM text (auto-detects version).
+ * Both 5.5.1 and 7.0 produce the same data model.
+ */
 export function parseGedcom(text) {
+  const version = detectVersion(text);
   const lines = text.split(/\r?\n/);
   const individuals = new Map();
   const families = new Map();
@@ -16,7 +37,10 @@ export function parseGedcom(text) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    const match = trimmed.match(/^(\d+)\s+(@\w+@)?\s*(\w+)\s*(.*)?$/);
+    // GEDCOM 7.0 may use @XREF@ before or after tag
+    // 5.5.1: "0 @I1@ INDI"
+    // 7.0:   "0 @I1@ INDI" (same) or potentially different ordering
+    const match = trimmed.match(/^(\d+)\s+(@[\w]+@)?\s*(\w+)\s*(.*)?$/);
     if (!match) continue;
 
     const level = parseInt(match[1]);
@@ -82,7 +106,7 @@ export function parseGedcom(text) {
           case 'CHR': currentSubTag = 'CHR'; break;
           case 'BURI': currentSubTag = 'BURI'; break;
           case 'NAME':
-            // Parse name: "Given /Surname/"
+            currentSubTag = 'NAME';
             const nameMatch = value.match(/^(.+?)\s*\/(.+?)\//);
             if (nameMatch) {
               currentRecord.givenName = currentRecord.givenName || nameMatch[1].trim();
@@ -127,7 +151,7 @@ export function parseGedcom(text) {
     }
   }
 
-  return { individuals, families, homePersonId };
+  return { individuals, families, homePersonId, version };
 }
 
 export function getDisplayName(individual) {

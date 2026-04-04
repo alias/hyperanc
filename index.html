@@ -18,6 +18,8 @@
     </div>
     <div class="header-right">
       <span id="root-name"></span>
+      <button id="load-btn" class="toggle-btn" title="GEDCOM laden">Laden</button>
+      <button id="save-btn" class="toggle-btn" title="GEDCOM speichern">Speichern</button>
       <button id="siblings-btn" class="toggle-btn" title="Geschwister ein/aus">Geschwister</button>
       <button id="help-btn" title="Hilfe">?</button>
     </div>
@@ -39,7 +41,58 @@
     <div class="info-empty">Klicken Sie auf eine Person</div>
   </div>
 
-  <div id="help-overlay" style="display: none;">
+  <!-- Load Dialog -->
+  <div id="load-overlay" class="overlay" style="display: none;">
+    <div class="dialog">
+      <h2>GEDCOM laden</h2>
+      <div class="dialog-section">
+        <label>Datei auswählen:</label>
+        <input type="file" id="file-input" accept=".ged,.gedcom">
+      </div>
+      <div class="dialog-divider">oder</div>
+      <div class="dialog-section">
+        <label>URL eingeben:</label>
+        <div class="url-row">
+          <input type="text" id="url-input" placeholder="https://example.com/family.ged">
+          <button id="url-load-btn">Laden</button>
+        </div>
+      </div>
+      <div class="dialog-divider">oder</div>
+      <div class="dialog-section">
+        <div id="drop-zone" class="drop-zone">
+          .ged Datei hierher ziehen
+        </div>
+      </div>
+      <div class="dialog-footer">
+        <span id="load-status"></span>
+        <button id="load-close-btn" class="btn-secondary">Schließen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Dialog -->
+  <div id="save-overlay" class="overlay" style="display: none;">
+    <div class="dialog">
+      <h2>GEDCOM speichern</h2>
+      <div class="dialog-section">
+        <label>Format:</label>
+        <select id="save-format">
+          <option value="5.5.1">GEDCOM 5.5.1</option>
+          <option value="7.0">GEDCOM 7.0</option>
+        </select>
+      </div>
+      <div class="dialog-section">
+        <label>Dateiname:</label>
+        <input type="text" id="save-filename" value="ahnentafel.ged">
+      </div>
+      <div class="dialog-footer">
+        <button id="save-download-btn" class="btn-primary">Herunterladen</button>
+        <button id="save-close-btn" class="btn-secondary">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help-overlay" class="overlay" style="display: none;">
     <div class="help-content">
       <h2>Bedienung</h2>
       <p><strong>Klick</strong> auf Person: Zentriert den Baum auf diese Person</p>
