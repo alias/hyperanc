@@ -105,6 +105,29 @@ body {
   max-width: 300px;
 }
 
+.toggle-btn {
+  background: none;
+  border: 1px solid #0f3460;
+  color: #888;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.toggle-btn:hover {
+  background: #0f3460;
+  color: #e0e0e0;
+}
+
+.toggle-btn.active {
+  background: #0f3460;
+  color: #e94560;
+  border-color: #e94560;
+}
+
 #help-btn {
   background: none;
   border: 1px solid #0f3460;
@@ -151,6 +174,15 @@ body {
   stroke-linecap: round;
 }
 
+/* Sibling edges - dashed, same color as tree edges */
+.sibling-edge {
+  fill: none;
+  stroke: #5a7a9a;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  stroke-linecap: round;
+}
+
 /* Nodes */
 .node-circle {
   stroke-width: 1.5;
@@ -172,8 +204,24 @@ body {
   stroke: #888;
 }
 
+/* Sibling nodes - paler/translucent */
+.node-circle.sibling-male {
+  fill: rgba(30, 96, 145, 0.5);
+  stroke: rgba(77, 168, 218, 0.5);
+}
+
+.node-circle.sibling-female {
+  fill: rgba(139, 34, 82, 0.5);
+  stroke: rgba(233, 69, 96, 0.5);
+}
+
+.node-circle.sibling-unknown {
+  fill: rgba(85, 85, 85, 0.5);
+  stroke: rgba(136, 136, 136, 0.5);
+}
+
 .node-circle.root {
-  fill: #e94560;
+  fill: #d4a017;
   stroke: #fff;
   stroke-width: 2.5;
 }
@@ -312,4 +360,5 @@ body {
 
 .legend-dot.male { background: #1e6091; border: 1px solid #4da8da; }
 .legend-dot.female { background: #8b2252; border: 1px solid #e94560; }
-.legend-dot.root { background: #e94560; border: 1px solid #fff; }
+.legend-dot.root { background: #d4a017; border: 1px solid #fff; }
+.legend-dot.sibling { background: rgba(100, 140, 180, 0.5); border: 1px dashed #7a9ab8; }

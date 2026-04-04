@@ -15,8 +15,12 @@ export class UI {
     this.helpOverlay = document.getElementById('help-overlay');
     this.helpBtn = document.getElementById('help-btn');
 
+    this.siblingsBtn = document.getElementById('siblings-btn');
+    this.legendSibling = document.getElementById('legend-sibling');
+
     this._setupSearch();
     this._setupHelp();
+    this._setupSiblingsToggle();
   }
 
   _setupSearch() {
@@ -89,6 +93,18 @@ export class UI {
     }
   }
 
+  _setupSiblingsToggle() {
+    if (this.siblingsBtn) {
+      this.siblingsBtn.addEventListener('click', () => {
+        const active = this.app.toggleSiblings();
+        this.siblingsBtn.classList.toggle('active', active);
+        if (this.legendSibling) {
+          this.legendSibling.style.display = active ? 'flex' : 'none';
+        }
+      });
+    }
+  }
+
   setRootPerson(individual) {
     const name = getDisplayName(individual);
     const lifespan = getLifespan(individual);
@@ -105,7 +121,8 @@ export class UI {
     if (indi.birthPlace) html += `<div class="tooltip-place">Geburtsort: ${indi.birthPlace}</div>`;
     if (indi.occupation) html += `<div class="tooltip-occ">Beruf: ${indi.occupation}</div>`;
     if (node.ahnentafelNumber) html += `<div class="tooltip-ahn">Ahnentafel #${node.ahnentafelNumber}</div>`;
-    if (node.generation > 0) html += `<div class="tooltip-gen">Generation ${node.generation}</div>`;
+    if (node.direction === 'sibling') html += `<div class="tooltip-gen">Geschwister</div>`;
+    else if (node.generation > 0) html += `<div class="tooltip-gen">Generation ${node.generation}</div>`;
     else if (node.generation < 0) html += `<div class="tooltip-gen">Nachkomme Gen. ${-node.generation}</div>`;
 
     this.tooltip.innerHTML = html;

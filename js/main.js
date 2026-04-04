@@ -5,6 +5,7 @@
 import { parseGedcom } from './gedcom-parser.js';
 import { buildTree, flattenTree } from './tree-builder.js';
 import { layoutTree } from './hyperbolic-layout.js';
+import { layoutSiblings } from './sibling-layout.js';
 import { Renderer } from './renderer.js';
 import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
@@ -22,6 +23,7 @@ class App {
     this.ui = null;
     this.step = 0.9;
     this.transformFn = z => z;
+    this.showSiblings = false;
   }
 
   async init() {
@@ -51,6 +53,24 @@ class App {
     this.selectPerson(startId);
   }
 
+  toggleSiblings() {
+    this.showSiblings = !this.showSiblings;
+    this._rebuildFlatTree();
+    this.render();
+    return this.showSiblings;
+  }
+
+  _rebuildFlatTree() {
+    if (!this.tree) return;
+    this.flatTree = flattenTree(this.tree, this.data.individuals, this.data.families);
+    this.positions = layoutTree(this.tree, this.step);
+
+    // Layout sibling nodes near their connected tree node
+    if (this.flatTree.siblingNodes.length > 0) {
+      layoutSiblings(this.flatTree, this.positions);
+    }
+  }
+
   selectPerson(personId, resetView = true) {
     if (!this.data.individuals.has(personId)) return;
 
@@ -58,8 +78,7 @@ class App {
     this.tree = buildTree(personId, this.data.individuals, this.data.families);
     if (!this.tree) return;
 
-    this.flatTree = flattenTree(this.tree);
-    this.positions = layoutTree(this.tree, this.step);
+    this._rebuildFlatTree();
 
     if (resetView) {
       this.interaction.reset();
@@ -71,16 +90,13 @@ class App {
     this.render();
   }
 
-  /**
-   * Find which person is currently closest to the center of the view.
-   * Returns the node id or null.
-   */
   findCenterPerson() {
     if (!this.flatTree || !this.positions) return null;
 
     let closestId = null;
     let closestDist = Infinity;
 
+    // Only consider tree nodes (not siblings) for center detection
     for (const node of this.flatTree.nodes) {
       const diskPos = this.positions.get(node.id);
       if (!diskPos) continue;
@@ -95,32 +111,20 @@ class App {
     return closestId;
   }
 
-  /**
-   * Rebuild tree around whoever is closest to center, if it changed.
-   * Called on mouseup and during drag (debounced).
-   */
   rebuildAroundCenter() {
     const centerId = this.findCenterPerson();
     if (!centerId || centerId === this.currentRootId) return;
 
-    // Remember where the center person is in the current transformed view
-    // so we can keep the visual position stable after rebuild
     const oldDiskPos = this.positions.get(centerId);
     if (!oldDiskPos) return;
     const oldScreenPos = this.transformFn(oldDiskPos);
 
-    // Rebuild tree centered on this person
     this.currentRootId = centerId;
     this.tree = buildTree(centerId, this.data.individuals, this.data.families);
     if (!this.tree) return;
 
-    this.flatTree = flattenTree(this.tree);
-    this.positions = layoutTree(this.tree, this.step);
+    this._rebuildFlatTree();
 
-    // The new root is at [0,0] in layout space.
-    // We want it to appear at oldScreenPos in the view.
-    // So set the Möbius center to the negative of oldScreenPos
-    // (i.e., shift the view so origin maps to where the person was)
     const negPos = [-oldScreenPos[0], -oldScreenPos[1]];
     const r = cAbs(negPos);
     if (r < 0.95) {
@@ -142,30 +146,32 @@ class App {
   adjustStep(delta) {
     this.step = Math.max(0.3, Math.min(2.0, this.step + delta));
     this.positions = layoutTree(this.tree, this.step);
+    if (this.flatTree.siblingNodes.length > 0) {
+      layoutSiblings(this.flatTree, this.positions);
+    }
     this.render();
   }
 
   render() {
     if (!this.flatTree || !this.positions) return;
 
+    // Combine tree nodes + sibling nodes
+    const allNodes = [...this.flatTree.nodes, ...this.flatTree.siblingNodes];
+
     this.renderer.render(
-      this.flatTree.nodes,
+      allNodes,
       this.flatTree.edges,
+      this.flatTree.siblingEdges,
       this.positions,
       this.transformFn,
-      (node) => {
-        this.selectPerson(node.id);
-      },
-      (node, event) => {
-        this.ui.showTooltip(node, event);
-      },
-      () => {
-        this.ui.hideTooltip();
-      }
+      this.showSiblings,
+      (node) => { this.selectPerson(node.id); },
+      (node, event) => { this.ui.showTooltip(node, event); },
+      () => { this.ui.hideTooltip(); }
     );
   }
 }
 
 const app = new App();
-window._app = app; // expose for debugging
+window._app = app;
 app.init().catch(err => console.error('Init failed:', err));
