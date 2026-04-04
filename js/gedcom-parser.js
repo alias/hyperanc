@@ -65,7 +65,8 @@ export function parseGedcom(text) {
           deathPlace: '',
           occupation: '',
           familiesAsSpouse: [],
-          familyAsChild: null
+          familyAsChild: null,
+          images: [] // [{file, form, title}]
         };
         individuals.set(xref, currentRecord);
       } else if (xref && tag === 'FAM') {
@@ -105,6 +106,10 @@ export function parseGedcom(text) {
           case 'DEAT': currentSubTag = 'DEAT'; break;
           case 'CHR': currentSubTag = 'CHR'; break;
           case 'BURI': currentSubTag = 'BURI'; break;
+          case 'OBJE':
+            currentSubTag = 'OBJE';
+            currentRecord.images.push({ file: '', form: '', title: '' });
+            break;
           case 'NAME':
             currentSubTag = 'NAME';
             const nameMatch = value.match(/^(.+?)\s*\/(.+?)\//);
@@ -123,6 +128,13 @@ export function parseGedcom(text) {
         } else if (currentSubTag === 'DEAT') {
           if (tag === 'DATE') currentRecord.deathDate = value;
           else if (tag === 'PLAC') currentRecord.deathPlace = value;
+        } else if (currentSubTag === 'OBJE') {
+          const img = currentRecord.images[currentRecord.images.length - 1];
+          if (img) {
+            if (tag === 'FILE') img.file = value;
+            else if (tag === 'FORM') img.form = value;
+            else if (tag === 'TITL') img.title = value;
+          }
         } else if (currentSubTag === 'NAME') {
           if (tag === 'GIVN') currentRecord.givenName = value;
           else if (tag === 'SURN') currentRecord.surname = value;

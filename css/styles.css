@@ -301,6 +301,18 @@ body {
   overflow-y: auto;
 }
 
+.tooltip-image {
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.tooltip-image img {
+  max-width: 100%;
+  max-height: 120px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 .tooltip-name {
   font-weight: 600;
   font-size: 14px;

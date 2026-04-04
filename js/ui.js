@@ -119,6 +119,11 @@ export class UI {
    * Determine the relationship label relative to the center person.
    */
   _getRelationship(node) {
+    // Siblings first (they can have generation 0 too)
+    if (node.direction === 'sibling') {
+      return node.individual.sex === 'M' ? 'Bruder' : node.individual.sex === 'F' ? 'Schwester' : 'Geschwister';
+    }
+
     if (node.generation === 0) return null; // is the center person
 
     // Ancestors via Ahnentafel number
@@ -135,11 +140,6 @@ export class UI {
       if (gen === 3) return sex === 'M' ? 'Urenkel' : sex === 'F' ? 'Urenkelin' : 'Urenkel';
       const prefix = 'Ur'.repeat(gen - 2);
       return sex === 'M' ? `${prefix}enkel` : sex === 'F' ? `${prefix}enkelin` : `${prefix}enkel`;
-    }
-
-    // Siblings
-    if (node.direction === 'sibling') {
-      return node.individual.sex === 'M' ? 'Bruder' : node.individual.sex === 'F' ? 'Schwester' : 'Geschwister';
     }
 
     return null;
@@ -194,7 +194,17 @@ export class UI {
     const lifespan = getLifespan(indi);
     const data = this.app.data;
 
-    let html = `<div class="tooltip-name">${name}</div>`;
+    let html = '';
+
+    // Person image (first available)
+    if (indi.images && indi.images.length > 0) {
+      const img = indi.images.find(i => i.file) || indi.images[0];
+      if (img && img.file) {
+        html += `<div class="tooltip-image"><img src="${img.file}" alt="${name}" onerror="this.parentElement.style.display='none'"></div>`;
+      }
+    }
+
+    html += `<div class="tooltip-name">${name}</div>`;
     if (lifespan) html += `<div class="tooltip-dates">${lifespan}</div>`;
     if (indi.birthPlace) html += `<div class="tooltip-place">Geburtsort: ${indi.birthPlace}</div>`;
     if (indi.deathPlace) html += `<div class="tooltip-place">Sterbeort: ${indi.deathPlace}</div>`;
@@ -256,9 +266,36 @@ export class UI {
             }
           }
           if (sibParts.length > 0) {
-            html += `<div class="tooltip-family"><div class="family-label">Geschwister:</div>${sibParts.join('')}</div>`;
+            html += `<div class="tooltip-family"><div class="family-label">${sibParts.length} Geschwister:</div>${sibParts.join('')}</div>`;
           }
         }
+      }
+    }
+
+    // Spouses / Partners (via FAMS)
+    if (indi.familiesAsSpouse && indi.familiesAsSpouse.length > 0) {
+      const spouseParts = [];
+      for (const famId of indi.familiesAsSpouse) {
+        const fam = data.families.get(famId);
+        if (!fam) continue;
+        // Find the other partner
+        const spouseId = fam.husbandId === indi.id ? fam.wifeId : fam.husbandId;
+        if (!spouseId) continue;
+        const spouse = data.individuals.get(spouseId);
+        if (!spouse) continue;
+
+        // Extract marriage year if available
+        let yearStr = '';
+        if (fam.marriageDate) {
+          const yearMatch = fam.marriageDate.match(/\d{4}/);
+          if (yearMatch) yearStr = ` (${yearMatch[0]})`;
+        }
+
+        const rel = spouse.sex === 'M' ? 'Ehemann' : spouse.sex === 'F' ? 'Ehefrau' : 'Partner';
+        spouseParts.push(`<span class="person-link" data-id="${spouseId}">${rel}: ${getDisplayName(spouse)}${yearStr}</span>`);
+      }
+      if (spouseParts.length > 0) {
+        html += `<div class="tooltip-family"><div class="family-label">Partner:</div>${spouseParts.join('')}</div>`;
       }
     }
 
