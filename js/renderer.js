@@ -17,17 +17,67 @@ export class Renderer {
     // Create layers
     this.svg.attr('width', width).attr('height', height);
 
-    // Disk background
+    // Defs for globe gradient
+    const defs = this.svg.append('defs');
+
+    // Radial gradient for 3D globe effect
+    const globeGrad = defs.append('radialGradient')
+      .attr('id', 'globe-gradient')
+      .attr('cx', '40%').attr('cy', '35%')
+      .attr('r', '60%');
+    globeGrad.append('stop').attr('offset', '0%').attr('stop-color', '#1a2a4a');
+    globeGrad.append('stop').attr('offset', '50%').attr('stop-color', '#0d1b2a');
+    globeGrad.append('stop').attr('offset', '100%').attr('stop-color', '#060d16');
+
+    // Highlight gradient for specular reflection
+    const specGrad = defs.append('radialGradient')
+      .attr('id', 'globe-specular')
+      .attr('cx', '35%').attr('cy', '30%')
+      .attr('r', '40%');
+    specGrad.append('stop').attr('offset', '0%').attr('stop-color', 'rgba(255,255,255,0.08)');
+    specGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(255,255,255,0)');
+
+    // Shadow/atmosphere
+    const atmosGrad = defs.append('radialGradient')
+      .attr('id', 'globe-atmosphere')
+      .attr('cx', '50%').attr('cy', '50%')
+      .attr('r', '50%');
+    atmosGrad.append('stop').attr('offset', '80%').attr('stop-color', 'rgba(15,52,96,0)');
+    atmosGrad.append('stop').attr('offset', '95%').attr('stop-color', 'rgba(15,52,96,0.4)');
+    atmosGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(15,52,96,0.8)');
+
+    // Disk background with globe gradient
     this.svg.append('circle')
       .attr('class', 'disk-boundary')
       .attr('cx', this.cx)
       .attr('cy', this.cy)
-      .attr('r', this.radius);
+      .attr('r', this.radius)
+      .attr('fill', 'url(#globe-gradient)')
+      .attr('stroke', '#0f3460')
+      .attr('stroke-width', 2);
+
+    // Specular highlight overlay
+    this.svg.append('circle')
+      .attr('class', 'disk-specular')
+      .attr('cx', this.cx)
+      .attr('cy', this.cy)
+      .attr('r', this.radius)
+      .attr('fill', 'url(#globe-specular)')
+      .attr('pointer-events', 'none');
 
     // Generation rings (visual guide)
     this.ringsGroup = this.svg.append('g').attr('class', 'rings');
     this.edgesGroup = this.svg.append('g').attr('class', 'edges');
     this.nodesGroup = this.svg.append('g').attr('class', 'nodes');
+
+    // Atmosphere overlay on top
+    this.svg.append('circle')
+      .attr('class', 'disk-atmosphere')
+      .attr('cx', this.cx)
+      .attr('cy', this.cy)
+      .attr('r', this.radius)
+      .attr('fill', 'url(#globe-atmosphere)')
+      .attr('pointer-events', 'none');
   }
 
   resize(width, height) {
@@ -38,7 +88,7 @@ export class Renderer {
     this.cy = height / 2;
 
     this.svg.attr('width', width).attr('height', height);
-    this.svg.select('.disk-boundary')
+    this.svg.selectAll('.disk-boundary, .disk-specular, .disk-atmosphere')
       .attr('cx', this.cx)
       .attr('cy', this.cy)
       .attr('r', this.radius);
@@ -94,7 +144,7 @@ export class Renderer {
         const dp1 = diskPositions.get(d.source.id);
         const dp2 = diskPositions.get(d.target.id);
         const maxR = Math.max(cAbs(dp1), cAbs(dp2));
-        return Math.max(0.1, 1 - maxR);
+        return Math.max(0.25, 1 - maxR * 0.7);
       });
 
     // --- Nodes ---

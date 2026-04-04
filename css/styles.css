@@ -136,18 +136,19 @@ body {
   display: block;
 }
 
-/* Disk */
+/* Disk - globe styling is in SVG gradients */
 .disk-boundary {
-  fill: #0d1b2a;
   stroke: #0f3460;
   stroke-width: 2;
+  filter: drop-shadow(0 0 20px rgba(15, 52, 96, 0.6));
 }
 
 /* Edges */
 .edge {
   fill: none;
-  stroke: #334155;
-  stroke-width: 1;
+  stroke: #5a7a9a;
+  stroke-width: 1.8;
+  stroke-linecap: round;
 }
 
 /* Nodes */

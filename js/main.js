@@ -78,7 +78,6 @@ class App {
 
   setTransform(fn) {
     this.transformFn = fn;
-    this.render();
   }
 
   adjustStep(delta) {
