@@ -2,6 +2,7 @@
  * Interaction
  * Globe-like navigation: drag to pan via Möbius transforms,
  * scroll to zoom, click to recenter.
+ * Auto-rebuilds tree around whoever is closest to center.
  */
 import { mobiusTransform, mobiusInverse, hyperbolicRotation, screenToDisk, cAbs, cSub, cScale } from './hyperbolic-math.js';
 
@@ -10,13 +11,12 @@ export class Interaction {
     this.svg = svgElement;
     this.app = app;
 
-    // Current accumulated Möbius center
     this.center = [0, 0];
     this.rotation = 0;
 
-    // rAF throttle for smooth dragging
     this._rafId = null;
     this._needsRender = false;
+    this._rebuildTimer = null;
 
     this._setupDrag();
     this._setupZoom();
@@ -46,6 +46,25 @@ export class Interaction {
       this.app.transformFn = z => this.transform(z);
       this.app.render();
     });
+  }
+
+  /**
+   * Schedule a debounced tree rebuild during drag.
+   * Fires every 300ms while dragging to keep connections up to date.
+   */
+  _scheduleRebuild() {
+    if (this._rebuildTimer) return;
+    this._rebuildTimer = setTimeout(() => {
+      this._rebuildTimer = null;
+      this.app.rebuildAroundCenter();
+    }, 300);
+  }
+
+  _cancelRebuild() {
+    if (this._rebuildTimer) {
+      clearTimeout(this._rebuildTimer);
+      this._rebuildTimer = null;
+    }
   }
 
   recenter(targetOriginalPos, duration = 600) {
@@ -89,6 +108,7 @@ export class Interaction {
   _setupDrag() {
     let dragging = false;
     let lastDiskPos = null;
+    let hasMoved = false;
 
     const svg = d3.select(this.svg);
 
@@ -96,6 +116,7 @@ export class Interaction {
       if (event.target.closest('.node')) return;
       event.preventDefault();
       dragging = true;
+      hasMoved = false;
       const { cx, cy, radius } = this._getRendererInfo();
       const rect = this.svg.getBoundingClientRect();
       lastDiskPos = screenToDisk(event.clientX - rect.left, event.clientY - rect.top, cx, cy, radius);
@@ -119,19 +140,41 @@ export class Interaction {
       if (cAbs(scaledDelta) > 0.001) {
         this._composeShift(scaledDelta);
         this._scheduleRender();
+        hasMoved = true;
+        // Debounced rebuild during drag
+        this._scheduleRebuild();
       }
 
       lastDiskPos = currentDiskPos;
     });
 
-    svg.on('mouseup', () => { dragging = false; lastDiskPos = null; });
-    svg.on('mouseleave', () => { dragging = false; lastDiskPos = null; });
+    svg.on('mouseup', () => {
+      if (dragging && hasMoved) {
+        this._cancelRebuild();
+        // Immediate rebuild on release
+        this.app.rebuildAroundCenter();
+      }
+      dragging = false;
+      lastDiskPos = null;
+      hasMoved = false;
+    });
+
+    svg.on('mouseleave', () => {
+      if (dragging && hasMoved) {
+        this._cancelRebuild();
+        this.app.rebuildAroundCenter();
+      }
+      dragging = false;
+      lastDiskPos = null;
+      hasMoved = false;
+    });
 
     // Touch support
     svg.on('touchstart', (event) => {
       if (event.target.closest('.node')) return;
       event.preventDefault();
       dragging = true;
+      hasMoved = false;
       const touch = event.touches[0];
       const { cx, cy, radius } = this._getRendererInfo();
       const rect = this.svg.getBoundingClientRect();
@@ -154,11 +197,21 @@ export class Interaction {
       if (cAbs(scaledDelta) > 0.001) {
         this._composeShift(scaledDelta);
         this._scheduleRender();
+        hasMoved = true;
+        this._scheduleRebuild();
       }
       lastDiskPos = currentDiskPos;
     });
 
-    svg.on('touchend', () => { dragging = false; lastDiskPos = null; });
+    svg.on('touchend', () => {
+      if (dragging && hasMoved) {
+        this._cancelRebuild();
+        this.app.rebuildAroundCenter();
+      }
+      dragging = false;
+      lastDiskPos = null;
+      hasMoved = false;
+    });
   }
 
   _setupZoom() {
@@ -172,5 +225,6 @@ export class Interaction {
   reset() {
     this.center = [0, 0];
     this.rotation = 0;
+    this._cancelRebuild();
   }
 }
