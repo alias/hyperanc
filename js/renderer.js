@@ -316,16 +316,45 @@ export class Renderer {
     const fam = this._families.get(indi.familyAsChild);
     if (!fam || !fam.husbandId || !fam.wifeId) return;
 
-    const dp = this._currentDiskPositions;
     const sp = this._currentScreenPositions;
-    if (!dp.has(fam.husbandId) || !dp.has(fam.wifeId)) return;
+    if (!sp.has(fam.husbandId) || !sp.has(fam.wifeId) || !sp.has(node.id)) return;
 
-    const { cx, cy, radius } = this;
-    const hDisk = dp.get(fam.husbandId);
-    const wDisk = dp.get(fam.wifeId);
+    const hScreen = sp.get(fam.husbandId);
+    const wScreen = sp.get(fam.wifeId);
+    const childScreen = sp.get(node.id);
 
-    // Draw geodesic between the two parents
-    const pathD = geodesicPath(hDisk, wDisk, cx, cy, radius);
+    // Midpoint between parents
+    const midX = (hScreen[0] + wScreen[0]) / 2;
+    const midY = (hScreen[1] + wScreen[1]) / 2;
+
+    // Vector from midpoint to child
+    const toChildX = childScreen[0] - midX;
+    const toChildY = childScreen[1] - midY;
+    const toChildLen = Math.sqrt(toChildX * toChildX + toChildY * toChildY);
+
+    // Distance between parents
+    const parentDx = wScreen[0] - hScreen[0];
+    const parentDy = wScreen[1] - hScreen[1];
+    const parentDist = Math.sqrt(parentDx * parentDx + parentDy * parentDy);
+
+    // Bulge the arc AWAY from the child
+    // Control point is on the opposite side of the child from the midpoint
+    const bulgeAmount = Math.max(parentDist * 0.3, 25);
+    let cpX, cpY;
+    if (toChildLen > 1) {
+      // Push control point away from child
+      cpX = midX - (toChildX / toChildLen) * bulgeAmount;
+      cpY = midY - (toChildY / toChildLen) * bulgeAmount;
+    } else {
+      // Child is at the midpoint, use perpendicular
+      const perpX = -parentDy / (parentDist || 1);
+      const perpY = parentDx / (parentDist || 1);
+      cpX = midX + perpX * bulgeAmount;
+      cpY = midY + perpY * bulgeAmount;
+    }
+
+    // Draw quadratic bezier arc
+    const pathD = `M ${hScreen[0]} ${hScreen[1]} Q ${cpX} ${cpY} ${wScreen[0]} ${wScreen[1]}`;
 
     this.marriageGroup.append('path')
       .attr('class', 'marriage-line')
@@ -336,7 +365,7 @@ export class Renderer {
       .attr('stroke-dasharray', '3 2')
       .attr('stroke-opacity', 0.8);
 
-    // Marriage date label at midpoint
+    // Marriage date label at midpoint of the arc
     const marriageDate = fam.marriageDate || '';
     const marriagePlace = fam.marriagePlace || '';
     let label = '';
@@ -345,16 +374,22 @@ export class Renderer {
     else if (marriagePlace) label = marriagePlace;
 
     if (label) {
-      // Get midpoint on the actual path
       const pathEl = this.marriageGroup.select('.marriage-line').node();
       if (pathEl) {
         const totalLen = pathEl.getTotalLength();
         const mid = pathEl.getPointAtLength(totalLen / 2);
 
+        // Offset label slightly away from the child
+        let labelOffX = 0, labelOffY = -8;
+        if (toChildLen > 1) {
+          labelOffX = -(toChildX / toChildLen) * 10;
+          labelOffY = -(toChildY / toChildLen) * 10;
+        }
+
         this.marriageGroup.append('text')
           .attr('class', 'marriage-label')
-          .attr('x', mid.x)
-          .attr('y', mid.y - 6)
+          .attr('x', mid.x + labelOffX)
+          .attr('y', mid.y + labelOffY)
           .attr('text-anchor', 'middle')
           .attr('fill', '#e8b84b')
           .attr('font-size', '11px')
