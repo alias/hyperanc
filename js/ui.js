@@ -250,7 +250,9 @@ export class UI {
           for (const sibId of siblings) {
             const sib = data.individuals.get(sibId);
             if (sib) {
-              sibParts.push(`<span class="person-link" data-id="${sibId}">${getDisplayName(sib)}</span>`);
+              const rel = sib.sex === 'M' ? 'Bruder' : sib.sex === 'F' ? 'Schwester' : '';
+              const prefix = rel ? `${rel}: ` : '';
+              sibParts.push(`<span class="person-link" data-id="${sibId}">${prefix}${getDisplayName(sib)}</span>`);
             }
           }
           if (sibParts.length > 0) {
