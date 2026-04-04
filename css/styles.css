@@ -149,7 +149,7 @@ body {
 /* Canvas */
 #canvas-container {
   width: 100%;
-  height: calc(100vh - 50px - 48px);
+  height: calc(100vh - 50px);
   position: relative;
 }
 
@@ -261,7 +261,28 @@ body {
   border: none !important;
 }
 
-/* Tooltip */
+/* Center person info - top left */
+#center-info {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  border-radius: 8px;
+  padding: 10px 14px;
+  pointer-events: none;
+  z-index: 50;
+  min-width: 180px;
+  max-width: 280px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  display: none;
+}
+
+#center-info .tooltip-name {
+  color: #d4a017;
+}
+
+/* Tooltip (hover info) - top right */
 #tooltip {
   display: none;
   position: absolute;
@@ -272,6 +293,7 @@ body {
   pointer-events: none;
   z-index: 50;
   min-width: 180px;
+  max-width: 280px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
@@ -293,32 +315,7 @@ body {
   margin-top: 6px;
 }
 
-/* Info Panel */
-#info-panel {
-  height: 48px;
-  background: #16213e;
-  border-top: 1px solid #0f3460;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  gap: 16px;
-}
-
-.info-name {
-  font-weight: 600;
-  font-size: 14px;
-  color: #fff;
-}
-
-.info-details {
-  font-size: 12px;
-  color: #aaa;
-}
-
-.info-empty {
-  font-size: 13px;
-  color: #666;
-}
+/* Info Panel - removed, using center-info + tooltip instead */
 
 /* Overlays (shared) */
 .overlay {

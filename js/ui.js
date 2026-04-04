@@ -1,6 +1,6 @@
 /**
  * UI Components
- * Search, info panel, person selector, map view.
+ * Search, center info panel, hover tooltip, map view.
  */
 import { getDisplayName, getLifespan } from './gedcom-parser.js';
 import { geocode, collectPlaces } from './geocoder.js';
@@ -11,7 +11,7 @@ export class UI {
     this.app = app;
     this.searchInput = document.getElementById('search-input');
     this.searchResults = document.getElementById('search-results');
-    this.infoPanel = document.getElementById('info-panel');
+    this.centerInfo = document.getElementById('center-info');
     this.tooltip = document.getElementById('tooltip');
     this.rootName = document.getElementById('root-name');
     this.helpOverlay = document.getElementById('help-overlay');
@@ -20,7 +20,7 @@ export class UI {
     this.legendSibling = document.getElementById('legend-sibling');
 
     this.mapView = new MapView('map-container');
-    this._currentHoverId = null; // track which person is hovered
+    this._currentHoverId = null;
 
     this._setupSearch();
     this._setupHelp();
@@ -115,7 +115,10 @@ export class UI {
     this.rootName.textContent = lifespan ? `${name} (${lifespan})` : name;
   }
 
-  showTooltip(node, event) {
+  /**
+   * Build person detail HTML (shared by center info and tooltip).
+   */
+  _buildPersonHtml(node) {
     const indi = node.individual;
     const name = getDisplayName(indi);
     const lifespan = getLifespan(indi);
@@ -130,10 +133,30 @@ export class UI {
     else if (node.generation > 0) html += `<div class="tooltip-gen">Generation ${node.generation}</div>`;
     else if (node.generation < 0) html += `<div class="tooltip-gen">Nachkomme Gen. ${-node.generation}</div>`;
 
-    this.tooltip.innerHTML = html;
+    return html;
+  }
+
+  /**
+   * Update the center person info (top left) - shows the current root person.
+   */
+  updateCenterInfo(node) {
+    if (!node) {
+      this.centerInfo.style.display = 'none';
+      return;
+    }
+    this.centerInfo.innerHTML = this._buildPersonHtml(node);
+    this.centerInfo.style.display = 'block';
+  }
+
+  /**
+   * Show hover tooltip (top right) for the moused-over person.
+   */
+  showTooltip(node, event) {
+    this.tooltip.innerHTML = this._buildPersonHtml(node);
     this.tooltip.style.display = 'block';
-    this.tooltip.style.left = '16px';
+    this.tooltip.style.right = '16px';
     this.tooltip.style.top = '16px';
+    this.tooltip.style.left = 'auto';
 
     // Update map with person's places
     this._updateMap(node);
@@ -141,7 +164,6 @@ export class UI {
 
   hideTooltip() {
     // Keep tooltip and map visible on mouseout
-    // They will be updated on next hover
   }
 
   async _updateMap(node) {
@@ -154,43 +176,21 @@ export class UI {
       return;
     }
 
-    // Geocode each place (async, cached)
     const geoResults = [];
     for (const p of places) {
-      // Check if we're still hovering the same person
       if (this._currentHoverId !== hoverId) return;
-
       const coords = await geocode(p.place);
       if (coords) {
         geoResults.push({ ...p, lat: coords.lat, lng: coords.lng });
       }
     }
 
-    // Still hovering same person?
     if (this._currentHoverId !== hoverId) return;
-
     this.mapView.show(geoResults);
   }
 
+  // Legacy - kept for compatibility but now uses updateCenterInfo
   updateInfoPanel(node) {
-    if (!node) {
-      this.infoPanel.innerHTML = '<div class="info-empty">Klicken Sie auf eine Person</div>';
-      return;
-    }
-    const indi = node.individual;
-    const name = getDisplayName(indi);
-
-    let html = `<div class="info-name">${name}</div>`;
-    const parts = [];
-    if (indi.birthDate) parts.push(`* ${indi.birthDate}${indi.birthPlace ? ', ' + indi.birthPlace : ''}`);
-    if (indi.deathDate) parts.push(`+ ${indi.deathDate}${indi.deathPlace ? ', ' + indi.deathPlace : ''}`);
-    if (indi.occupation) parts.push(`Beruf: ${indi.occupation}`);
-    if (node.ahnentafelNumber) parts.push(`Ahnentafel #${node.ahnentafelNumber}`);
-
-    if (parts.length > 0) {
-      html += `<div class="info-details">${parts.join(' | ')}</div>`;
-    }
-
-    this.infoPanel.innerHTML = html;
+    this.updateCenterInfo(node);
   }
 }
