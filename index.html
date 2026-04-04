@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hyperbolische Ahnentafel</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+</head>
+<body>
+  <div class="header">
+    <h1>Hyperbolische Ahnentafel</h1>
+    <div class="search-container">
+      <input type="text" id="search-input" placeholder="Person suchen..." autocomplete="off">
+      <div id="search-results"></div>
+    </div>
+    <div class="header-right">
+      <span id="root-name"></span>
+      <button id="help-btn" title="Hilfe">?</button>
+    </div>
+  </div>
+
+  <div id="canvas-container">
+    <svg id="hyperbolic-svg"></svg>
+    <div id="tooltip"></div>
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot male"></div> Männlich</div>
+      <div class="legend-item"><div class="legend-dot female"></div> Weiblich</div>
+      <div class="legend-item"><div class="legend-dot root"></div> Zentrum</div>
+    </div>
+  </div>
+
+  <div id="info-panel">
+    <div class="info-empty">Klicken Sie auf eine Person</div>
+  </div>
+
+  <div id="help-overlay" style="display: none;">
+    <div class="help-content">
+      <h2>Bedienung</h2>
+      <p><strong>Klick</strong> auf Person: Zentriert den Baum auf diese Person</p>
+      <p><strong>Maus ziehen</strong>: Dreht die Ansicht</p>
+      <p><strong>Mausrad</strong>: Vergrößert / verkleinert den Abstand zwischen Generationen</p>
+      <p><strong>Suche</strong>: Tippen Sie einen Namen ein, um eine Person zu finden</p>
+      <p><strong>Hover</strong>: Zeigt Details zur Person</p>
+      <p style="margin-top: 16px; color: #888;">Klicken Sie außerhalb, um zu schließen.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
