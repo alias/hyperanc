@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Hyperbolische Ahnentafel</title>
   <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9/dist/leaflet.min.css">
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9/dist/leaflet.min.js"></script>
 </head>
 <body>
   <div class="header">
@@ -24,6 +26,7 @@
   <div id="canvas-container">
     <svg id="hyperbolic-svg"></svg>
     <div id="tooltip"></div>
+    <div id="map-container"></div>
     <div class="legend">
       <div class="legend-item"><div class="legend-dot male"></div> Männlich</div>
       <div class="legend-item"><div class="legend-dot female"></div> Weiblich</div>

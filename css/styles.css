@@ -237,6 +237,30 @@ body {
   font-size: 11px;
 }
 
+/* Map */
+#map-container {
+  display: none;
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  width: 250px;
+  height: 180px;
+  border-radius: 8px;
+  border: 1px solid #0f3460;
+  overflow: hidden;
+  z-index: 45;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+#map-container .leaflet-container {
+  background: #0d1b2a;
+}
+
+.map-marker-icon {
+  background: none !important;
+  border: none !important;
+}
+
 /* Tooltip */
 #tooltip {
   display: none;

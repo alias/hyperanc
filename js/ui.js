@@ -1,8 +1,10 @@
 /**
  * UI Components
- * Search, info panel, person selector.
+ * Search, info panel, person selector, map view.
  */
 import { getDisplayName, getLifespan } from './gedcom-parser.js';
+import { geocode, collectPlaces } from './geocoder.js';
+import { MapView } from './map-view.js';
 
 export class UI {
   constructor(app) {
@@ -14,9 +16,11 @@ export class UI {
     this.rootName = document.getElementById('root-name');
     this.helpOverlay = document.getElementById('help-overlay');
     this.helpBtn = document.getElementById('help-btn');
-
     this.siblingsBtn = document.getElementById('siblings-btn');
     this.legendSibling = document.getElementById('legend-sibling');
+
+    this.mapView = new MapView('map-container');
+    this._currentHoverId = null; // track which person is hovered
 
     this._setupSearch();
     this._setupHelp();
@@ -119,6 +123,7 @@ export class UI {
     let html = `<div class="tooltip-name">${name}</div>`;
     if (lifespan) html += `<div class="tooltip-dates">${lifespan}</div>`;
     if (indi.birthPlace) html += `<div class="tooltip-place">Geburtsort: ${indi.birthPlace}</div>`;
+    if (indi.deathPlace) html += `<div class="tooltip-place">Sterbeort: ${indi.deathPlace}</div>`;
     if (indi.occupation) html += `<div class="tooltip-occ">Beruf: ${indi.occupation}</div>`;
     if (node.ahnentafelNumber) html += `<div class="tooltip-ahn">Ahnentafel #${node.ahnentafelNumber}</div>`;
     if (node.direction === 'sibling') html += `<div class="tooltip-gen">Geschwister</div>`;
@@ -127,14 +132,44 @@ export class UI {
 
     this.tooltip.innerHTML = html;
     this.tooltip.style.display = 'block';
-
-    // Fixed position: top-left area of the canvas
     this.tooltip.style.left = '16px';
     this.tooltip.style.top = '16px';
+
+    // Update map with person's places
+    this._updateMap(node);
   }
 
   hideTooltip() {
-    this.tooltip.style.display = 'none';
+    // Keep tooltip and map visible on mouseout
+    // They will be updated on next hover
+  }
+
+  async _updateMap(node) {
+    const hoverId = node.id;
+    this._currentHoverId = hoverId;
+
+    const places = collectPlaces(node.individual);
+    if (places.length === 0) {
+      this.mapView.hide();
+      return;
+    }
+
+    // Geocode each place (async, cached)
+    const geoResults = [];
+    for (const p of places) {
+      // Check if we're still hovering the same person
+      if (this._currentHoverId !== hoverId) return;
+
+      const coords = await geocode(p.place);
+      if (coords) {
+        geoResults.push({ ...p, lat: coords.lat, lng: coords.lng });
+      }
+    }
+
+    // Still hovering same person?
+    if (this._currentHoverId !== hoverId) return;
+
+    this.mapView.show(geoResults);
   }
 
   updateInfoPanel(node) {
