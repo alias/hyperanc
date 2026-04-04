@@ -67,6 +67,7 @@ export class Renderer {
     this.ringsGroup = this.svg.append('g').attr('class', 'rings');
     this.siblingEdgesGroup = this.svg.append('g').attr('class', 'sibling-edges');
     this.edgesGroup = this.svg.append('g').attr('class', 'edges');
+    this.marriageGroup = this.svg.append('g').attr('class', 'marriage-overlay');
     this.nodesGroup = this.svg.append('g').attr('class', 'nodes');
 
     this.svg.append('circle')
@@ -88,7 +89,7 @@ export class Renderer {
       .attr('cx', this.cx).attr('cy', this.cy).attr('r', this.radius);
   }
 
-  render(allNodes, treeEdges, siblingEdges, positions, transformFn, showSiblings, onNodeClick, onNodeHover, onNodeLeave) {
+  render(allNodes, treeEdges, siblingEdges, positions, transformFn, showSiblings, families, individuals, onNodeClick, onNodeHover, onNodeLeave) {
     const { cx, cy, radius } = this;
 
     // Transform all positions
@@ -279,6 +280,13 @@ export class Renderer {
         return d.direction === 'sibling' ? base * 0.7 : base;
       });
 
+    // Store refs for marriage hover
+    this._currentDiskPositions = diskPositions;
+    this._currentScreenPositions = screenPositions;
+    this._currentNodeMap = new Map(allNodes.map(n => [n.id, n]));
+    this._families = families;
+    this._individuals = individuals;
+
     merged
       .on('click', (event, d) => {
         event.stopPropagation();
@@ -286,9 +294,77 @@ export class Renderer {
       })
       .on('mouseenter', (event, d) => {
         if (onNodeHover) onNodeHover(d, event);
+        this._showMarriageLine(d);
       })
       .on('mouseleave', (event, d) => {
         if (onNodeLeave) onNodeLeave(d);
+        this._hideMarriageLine();
       });
+  }
+
+  /**
+   * On hover over a child node, find its parents. If both are visible,
+   * draw a geodesic line between them with marriage date label.
+   */
+  _showMarriageLine(node) {
+    this._hideMarriageLine();
+    if (!this._families || !this._individuals) return;
+
+    const indi = node.individual;
+    if (!indi.familyAsChild) return;
+
+    const fam = this._families.get(indi.familyAsChild);
+    if (!fam || !fam.husbandId || !fam.wifeId) return;
+
+    const dp = this._currentDiskPositions;
+    const sp = this._currentScreenPositions;
+    if (!dp.has(fam.husbandId) || !dp.has(fam.wifeId)) return;
+
+    const { cx, cy, radius } = this;
+    const hDisk = dp.get(fam.husbandId);
+    const wDisk = dp.get(fam.wifeId);
+
+    // Draw geodesic between the two parents
+    const pathD = geodesicPath(hDisk, wDisk, cx, cy, radius);
+
+    this.marriageGroup.append('path')
+      .attr('class', 'marriage-line')
+      .attr('d', pathD)
+      .attr('fill', 'none')
+      .attr('stroke', '#e8b84b')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '3 2')
+      .attr('stroke-opacity', 0.8);
+
+    // Marriage date label at midpoint
+    const marriageDate = fam.marriageDate || '';
+    const marriagePlace = fam.marriagePlace || '';
+    let label = '';
+    if (marriageDate && marriagePlace) label = `${marriageDate}, ${marriagePlace}`;
+    else if (marriageDate) label = marriageDate;
+    else if (marriagePlace) label = marriagePlace;
+
+    if (label) {
+      // Get midpoint on the actual path
+      const pathEl = this.marriageGroup.select('.marriage-line').node();
+      if (pathEl) {
+        const totalLen = pathEl.getTotalLength();
+        const mid = pathEl.getPointAtLength(totalLen / 2);
+
+        this.marriageGroup.append('text')
+          .attr('class', 'marriage-label')
+          .attr('x', mid.x)
+          .attr('y', mid.y - 6)
+          .attr('text-anchor', 'middle')
+          .attr('fill', '#e8b84b')
+          .attr('font-size', '11px')
+          .attr('font-weight', '600')
+          .text(label);
+      }
+    }
+  }
+
+  _hideMarriageLine() {
+    this.marriageGroup.selectAll('*').remove();
   }
 }

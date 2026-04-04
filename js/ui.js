@@ -128,19 +128,9 @@ export class UI {
     this.tooltip.innerHTML = html;
     this.tooltip.style.display = 'block';
 
-    // Position tooltip near mouse
-    const rect = document.getElementById('hyperbolic-svg').getBoundingClientRect();
-    let x = event.clientX - rect.left + 15;
-    let y = event.clientY - rect.top - 10;
-
-    // Keep within bounds
-    const tw = this.tooltip.offsetWidth;
-    const th = this.tooltip.offsetHeight;
-    if (x + tw > rect.width) x = x - tw - 30;
-    if (y + th > rect.height) y = y - th;
-
-    this.tooltip.style.left = x + 'px';
-    this.tooltip.style.top = y + 'px';
+    // Fixed position: top-left area of the canvas
+    this.tooltip.style.left = '16px';
+    this.tooltip.style.top = '16px';
   }
 
   hideTooltip() {

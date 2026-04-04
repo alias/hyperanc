@@ -165,6 +165,8 @@ class App {
       this.positions,
       this.transformFn,
       this.showSiblings,
+      this.data.families,
+      this.data.individuals,
       (node) => { this.selectPerson(node.id); },
       (node, event) => { this.ui.showTooltip(node, event); },
       () => { this.ui.hideTooltip(); }
