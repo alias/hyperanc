@@ -213,7 +213,9 @@ export class TimelineView {
         .on('click', () => this.app.selectPerson(p.id))
         .on('mouseenter', () => {
           this.app.ui.showTooltip(p.node, {});
+          marriageOverlay.selectAll('*').remove();
           this._showMarriageLine(p, personYMap, yearToX, marriageOverlay);
+          this._showSiblingLines(p, personYMap, marriageOverlay);
         })
         .on('mouseleave', () => {
           marriageOverlay.selectAll('*').remove();
@@ -343,5 +345,74 @@ export class TimelineView {
     overlay.append('circle')
       .attr('cx', lineX).attr('cy', y2)
       .attr('r', 3).attr('fill', '#e8b84b');
+  }
+
+  /**
+   * Draw horizontal lines connecting siblings on hover.
+   */
+  _showSiblingLines(person, personYMap, overlay) {
+    if (!this.app.showSiblings) return;
+    if (!this.app.flatTree) return;
+
+    const myPos = personYMap.get(person.id);
+    if (!myPos) return;
+
+    const indi = person.individual;
+    const { families, individuals } = this.app.data;
+    if (!indi.familyAsChild) return;
+
+    const fam = families.get(indi.familyAsChild);
+    if (!fam) return;
+
+    // Collect all sibling IDs (full + half)
+    const fullSibIds = new Set(fam.childIds.filter(id => id !== person.id));
+    const halfSibIds = new Set();
+
+    // Half-siblings via shared parents in other families
+    const parentIds = [fam.husbandId, fam.wifeId].filter(Boolean);
+    for (const parentId of parentIds) {
+      const parent = individuals.get(parentId);
+      if (!parent) continue;
+      for (const otherFamId of parent.familiesAsSpouse) {
+        if (otherFamId === indi.familyAsChild) continue;
+        const otherFam = families.get(otherFamId);
+        if (!otherFam) continue;
+        for (const hid of otherFam.childIds) {
+          if (hid !== person.id && !fullSibIds.has(hid)) {
+            halfSibIds.add(hid);
+          }
+        }
+      }
+    }
+
+    // Draw lines to full siblings
+    for (const sibId of fullSibIds) {
+      const sibPos = personYMap.get(sibId);
+      if (!sibPos) continue;
+      const midX = (Math.max(myPos.x1, sibPos.x1) + Math.min(myPos.x2, sibPos.x2)) / 2;
+      overlay.append('line')
+        .attr('x1', midX).attr('x2', midX)
+        .attr('y1', Math.min(myPos.midY, sibPos.midY))
+        .attr('y2', Math.max(myPos.midY, sibPos.midY))
+        .attr('stroke', '#5a7a9a')
+        .attr('stroke-width', 1.5)
+        .attr('stroke-dasharray', '6 4')
+        .attr('stroke-opacity', 0.7);
+    }
+
+    // Draw lines to half-siblings (dotted, paler)
+    for (const sibId of halfSibIds) {
+      const sibPos = personYMap.get(sibId);
+      if (!sibPos) continue;
+      const midX = (Math.max(myPos.x1, sibPos.x1) + Math.min(myPos.x2, sibPos.x2)) / 2;
+      overlay.append('line')
+        .attr('x1', midX).attr('x2', midX)
+        .attr('y1', Math.min(myPos.midY, sibPos.midY))
+        .attr('y2', Math.max(myPos.midY, sibPos.midY))
+        .attr('stroke', '#5a7a9a')
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '2 3')
+        .attr('stroke-opacity', 0.4);
+    }
   }
 }

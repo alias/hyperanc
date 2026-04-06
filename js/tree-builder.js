@@ -111,11 +111,13 @@ export function flattenTree(root, individuals, families) {
 
   if (root) traverse(root, null);
 
-  // Find siblings: for each node in the tree, find other children
-  // in the same FAMC family that are NOT already in the tree
+  // Find siblings and half-siblings
+  // Full siblings: share the same FAMC family
+  // Half-siblings: share one parent via a different family
   const siblingNodes = [];
   const siblingEdges = [];
-  const siblingIds = new Set();
+  const edgeKeys = new Set();
+  const sibNodeIds = new Set();
 
   if (individuals && families) {
     for (const node of nodes) {
@@ -125,59 +127,72 @@ export function flattenTree(root, individuals, families) {
       const fam = families.get(indi.familyAsChild);
       if (!fam) continue;
 
+      // --- Full siblings: other children in same FAMC ---
       for (const sibId of fam.childIds) {
-        if (sibId === node.id) continue; // skip self
+        if (sibId === node.id) continue;
+        _addSiblingEdge(node, sibId, 'sibling');
+      }
 
-        // Create sibling edge
-        if (nodeMap.has(sibId)) {
-          // Sibling is already in tree - just add a sibling edge between them
-          // But only if we haven't already (avoid duplicates)
-          const key = [node.id, sibId].sort().join('-');
-          if (!siblingIds.has(key)) {
-            siblingIds.add(key);
-            siblingEdges.push({
-              source: node,
-              target: nodeMap.get(sibId),
-              type: 'sibling'
-            });
+      // --- Half-siblings: children of same father or mother in OTHER families ---
+      const parentIds = [fam.husbandId, fam.wifeId].filter(Boolean);
+      for (const parentId of parentIds) {
+        const parent = individuals.get(parentId);
+        if (!parent) continue;
+        for (const otherFamId of parent.familiesAsSpouse) {
+          if (otherFamId === indi.familyAsChild) continue; // skip own family
+          const otherFam = families.get(otherFamId);
+          if (!otherFam) continue;
+          for (const halfSibId of otherFam.childIds) {
+            if (halfSibId === node.id) continue;
+            _addSiblingEdge(node, halfSibId, 'half-sibling');
           }
-        } else {
-          // Sibling not in tree - create a sibling node
-          const sibIndi = individuals.get(sibId);
-          if (!sibIndi) continue;
-
-          // Only add each sibling once
-          if (siblingIds.has(sibId)) {
-            // Already added as sibling node, just add edge
-            const existingSib = siblingNodes.find(n => n.id === sibId);
-            if (existingSib) {
-              siblingEdges.push({
-                source: node,
-                target: existingSib,
-                type: 'sibling'
-              });
-            }
-            continue;
-          }
-
-          siblingIds.add(sibId);
-
-          const sibNode = {
-            id: sibId,
-            individual: sibIndi,
-            children: [],
-            direction: 'sibling',
-            generation: node.generation,
-            ahnentafelNumber: null
-          };
-
-          siblingNodes.push(sibNode);
-          siblingEdges.push({
-            source: node,
-            target: sibNode,
-            type: 'sibling'
-          });
         }
+      }
+    }
+  }
+
+  function _addSiblingEdge(treeNode, sibId, type) {
+    const key = [treeNode.id, sibId].sort().join('-') + '-' + type;
+    // Don't upgrade a full-sibling edge to half-sibling
+    const fullKey = [treeNode.id, sibId].sort().join('-') + '-sibling';
+    if (edgeKeys.has(fullKey) && type === 'half-sibling') return;
+    if (edgeKeys.has(key)) return;
+    edgeKeys.add(key);
+
+    if (nodeMap.has(sibId)) {
+      // Sibling already in tree
+      siblingEdges.push({
+        source: treeNode,
+        target: nodeMap.get(sibId),
+        type
+      });
+    } else {
+      // Create sibling node if not exists
+      const sibIndi = individuals.get(sibId);
+      if (!sibIndi) return;
+
+      let sibNode;
+      if (sibNodeIds.has(sibId)) {
+        sibNode = siblingNodes.find(n => n.id === sibId);
+      } else {
+        sibNodeIds.add(sibId);
+        sibNode = {
+          id: sibId,
+          individual: sibIndi,
+          children: [],
+          direction: 'sibling',
+          generation: treeNode.generation,
+          ahnentafelNumber: null
+        };
+        siblingNodes.push(sibNode);
+      }
+
+      if (sibNode) {
+        siblingEdges.push({
+          source: treeNode,
+          target: sibNode,
+          type
+        });
       }
     }
   }

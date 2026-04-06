@@ -436,6 +436,11 @@ body {
   text-decoration: underline;
 }
 
+.person-link.half-sib {
+  color: #3a7a9a;
+  font-style: italic;
+}
+
 /* Info Panel - removed, using center-info + tooltip instead */
 
 /* Overlays (shared) */

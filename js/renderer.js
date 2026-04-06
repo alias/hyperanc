@@ -136,14 +136,16 @@ export class Renderer {
     ) : [];
 
     const sibPaths = this.siblingEdgesGroup.selectAll('.sibling-edge')
-      .data(sibEdgeData, d => `sib-${d.source.id}-${d.target.id}`);
+      .data(sibEdgeData, d => `sib-${d.source.id}-${d.target.id}-${d.type}`);
     sibPaths.exit().remove();
     const sibEnter = sibPaths.enter().append('path').attr('class', 'sibling-edge');
     sibPaths.merge(sibEnter)
       .attr('d', d => geodesicPath(diskPositions.get(d.source.id), diskPositions.get(d.target.id), cx, cy, radius))
+      .attr('stroke-dasharray', d => d.type === 'half-sibling' ? '2 3' : '6 4')
       .attr('stroke-opacity', d => {
         const maxR = Math.max(cAbs(diskPositions.get(d.source.id)), cAbs(diskPositions.get(d.target.id)));
-        return Math.max(0.2, 1 - maxR * 0.7);
+        const base = Math.max(0.2, 1 - maxR * 0.7);
+        return d.type === 'half-sibling' ? base * 0.5 : base;
       });
 
     // Store sibling data for hover lookup

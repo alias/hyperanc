@@ -253,11 +253,11 @@ export class UI {
           html += `<div class="tooltip-family"><div class="family-label">Eltern:</div>${parts.join('')}</div>`;
         }
 
-        // Siblings (other children in the same family)
-        const siblings = fam.childIds.filter(id => id !== indi.id);
-        if (siblings.length > 0) {
+        // Full siblings (other children in the same family)
+        const fullSibIds = fam.childIds.filter(id => id !== indi.id);
+        if (fullSibIds.length > 0) {
           const sibParts = [];
-          for (const sibId of siblings) {
+          for (const sibId of fullSibIds) {
             const sib = data.individuals.get(sibId);
             if (sib) {
               const rel = sib.sex === 'M' ? 'Bruder' : sib.sex === 'F' ? 'Schwester' : '';
@@ -268,6 +268,34 @@ export class UI {
           if (sibParts.length > 0) {
             html += `<div class="tooltip-family"><div class="family-label">${sibParts.length} Geschwister:</div>${sibParts.join('')}</div>`;
           }
+        }
+
+        // Half-siblings (shared parent via other families)
+        const fullSibSet = new Set(fullSibIds);
+        const halfSibParts = [];
+        const parentIds = [fam.husbandId, fam.wifeId].filter(Boolean);
+        const halfSibSeen = new Set();
+        for (const parentId of parentIds) {
+          const parent = data.individuals.get(parentId);
+          if (!parent) continue;
+          for (const otherFamId of parent.familiesAsSpouse) {
+            if (otherFamId === indi.familyAsChild) continue;
+            const otherFam = data.families.get(otherFamId);
+            if (!otherFam) continue;
+            for (const hid of otherFam.childIds) {
+              if (hid === indi.id || fullSibSet.has(hid) || halfSibSeen.has(hid)) continue;
+              halfSibSeen.add(hid);
+              const hsib = data.individuals.get(hid);
+              if (hsib) {
+                const rel = hsib.sex === 'M' ? 'Halbbruder' : hsib.sex === 'F' ? 'Halbschwester' : '';
+                const prefix = rel ? `${rel}: ` : '';
+                halfSibParts.push(`<span class="person-link half-sib" data-id="${hid}">${prefix}${getDisplayName(hsib)}</span>`);
+              }
+            }
+          }
+        }
+        if (halfSibParts.length > 0) {
+          html += `<div class="tooltip-family"><div class="family-label">${halfSibParts.length} Halbgeschwister:</div>${halfSibParts.join('')}</div>`;
         }
       }
     }
