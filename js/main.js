@@ -28,6 +28,9 @@ class App {
     this.showSiblings = false;
     this._viewInitialized = false;
     this.timelineView = null;
+    this._historyStack = [];
+    this._historyIndex = -1;
+    this._historyBlocked = false;
   }
 
   async init() {
@@ -77,6 +80,9 @@ class App {
     // View switching
     this.currentView = 'hyper';
     this._setupViewSwitching();
+
+    // Browser history (back/forward)
+    this._setupHistory();
   }
 
   _setupViewSwitching() {
@@ -104,6 +110,67 @@ class App {
       timelineView.style.display = 'block';
       this.renderTimeline();
     });
+  }
+
+  _setupHistory() {
+    // Keyboard: Alt+Left = back, Alt+Right = forward
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        this.historyBack();
+      } else if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        this.historyForward();
+      }
+    });
+
+    // Nav buttons
+    document.getElementById('nav-back-btn').addEventListener('click', () => this.historyBack());
+    document.getElementById('nav-fwd-btn').addEventListener('click', () => this.historyForward());
+
+    // Also handle browser back/forward via popstate
+    window.addEventListener('popstate', (e) => {
+      if (e.state && e.state.personId && this.data) {
+        this._historyBlocked = true;
+        this.selectPerson(e.state.personId);
+        this._historyBlocked = false;
+      }
+    });
+  }
+
+  _pushHistory(personId) {
+    if (this._historyBlocked) return;
+    // Don't push if same person
+    if (this._historyIndex >= 0 && this._historyStack[this._historyIndex] === personId) return;
+
+    // Truncate forward history
+    this._historyStack = this._historyStack.slice(0, this._historyIndex + 1);
+    this._historyStack.push(personId);
+    this._historyIndex = this._historyStack.length - 1;
+
+    // Also update browser history
+    try {
+      const state = { personId, view: this.currentView };
+      history.pushState(state, '', `#${encodeURIComponent(personId)}`);
+    } catch (e) { /* ignore if pushState fails */ }
+  }
+
+  historyBack() {
+    if (this._historyIndex <= 0) return;
+    this._historyIndex--;
+    const personId = this._historyStack[this._historyIndex];
+    this._historyBlocked = true;
+    this.selectPerson(personId);
+    this._historyBlocked = false;
+  }
+
+  historyForward() {
+    if (this._historyIndex >= this._historyStack.length - 1) return;
+    this._historyIndex++;
+    const personId = this._historyStack[this._historyIndex];
+    this._historyBlocked = true;
+    this.selectPerson(personId);
+    this._historyBlocked = false;
   }
 
   renderTimeline() {
@@ -267,6 +334,7 @@ class App {
   selectPerson(personId, resetView = true) {
     if (!this.data || !this.data.individuals.has(personId)) return;
 
+    this._pushHistory(personId);
     this.currentRootId = personId;
     this.tree = buildTree(personId, this.data.individuals, this.data.families);
     if (!this.tree) return;

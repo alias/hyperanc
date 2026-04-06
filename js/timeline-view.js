@@ -26,8 +26,16 @@ function getLifeRange(indi) {
     startKnown = false;
   }
   if (!endYear && startYear) {
-    endYear = startYear + 50;
-    endKnown = false;
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - startYear;
+    if (age < 120) {
+      // Could still be alive - extend to today
+      endYear = currentYear;
+      endKnown = false;
+    } else {
+      endYear = startYear + 50;
+      endKnown = false;
+    }
   }
 
   return { startYear, endYear, startKnown, endKnown };
@@ -46,8 +54,9 @@ export class TimelineView {
 
     const { individuals, families } = this.app.data;
 
-    // Collect persons
+    // Collect persons from tree + siblings
     const persons = [];
+    const addedIds = new Set();
     const treeNodes = this.app.flatTree ? this.app.flatTree.nodes : [];
     const siblingNodes = (this.app.showSiblings && this.app.flatTree) ? this.app.flatTree.siblingNodes : [];
 
@@ -55,13 +64,61 @@ export class TimelineView {
       const indi = node.individual;
       const range = getLifeRange(indi);
       if (!range) continue;
+      addedIds.add(node.id);
       persons.push({
         id: node.id,
         individual: indi,
         node,
         isSibling: node.direction === 'sibling',
+        isPartner: false,
         ...range
       });
+    }
+
+    // Add partners (spouses) of all persons
+    for (const p of [...persons]) { // iterate over copy
+      const indi = p.individual;
+      if (!indi.familiesAsSpouse) continue;
+      for (const famId of indi.familiesAsSpouse) {
+        const fam = families.get(famId);
+        if (!fam) continue;
+        const spouseId = fam.husbandId === p.id ? fam.wifeId : fam.husbandId;
+        if (!spouseId || addedIds.has(spouseId)) continue;
+        const spouse = individuals.get(spouseId);
+        if (!spouse) continue;
+        const range = getLifeRange(spouse);
+        if (!range) continue;
+        addedIds.add(spouseId);
+        persons.push({
+          id: spouseId,
+          individual: spouse,
+          node: { id: spouseId, individual: spouse, children: [], direction: 'partner', generation: p.node.generation, ahnentafelNumber: null },
+          isSibling: false,
+          isPartner: true,
+          ...range
+        });
+      }
+    }
+
+    if (persons.length === 0) return;
+
+    // Filter: only show persons whose life overlaps with the center person
+    // Filter: only show persons whose life overlaps with the center person
+    const centerNode = treeNodes.find(n => n.generation === 0 && n.direction !== 'sibling');
+    if (centerNode) {
+      const centerRange = getLifeRange(centerNode.individual);
+      if (centerRange) {
+        // If center person has no death date, extend to current year (may still be alive)
+        const centerEnd = centerNode.individual.deathDate
+          ? centerRange.endYear
+          : Math.max(centerRange.endYear, new Date().getFullYear());
+        const filtered = persons.filter(p => {
+          if (p.id === centerNode.id) return true;
+          return p.startYear <= centerEnd && p.endYear >= centerRange.startYear;
+        });
+        persons.length = 0;
+        persons.push(...filtered);
+      }
     }
 
     if (persons.length === 0) return;
@@ -199,7 +256,7 @@ export class TimelineView {
       const y = barStartY + i * (barHeight + barGap);
       const isFemale = p.individual.sex === 'F';
       const baseColor = isFemale ? '#e94560' : '#4da8da';
-      const isCenter = p.node.generation === 0 && p.node.direction !== 'sibling';
+      const isCenter = p.id === this.app.currentRootId;
 
       const x1 = yearToX(p.startYear);
       const x2 = yearToX(p.endYear);
@@ -227,7 +284,7 @@ export class TimelineView {
         .attr('id', gradId)
         .attr('x1', '0%').attr('x2', '100%');
 
-      const opacity = isCenter ? 0.9 : p.isSibling ? 0.35 : 0.65;
+      const opacity = isCenter ? 0.9 : (p.isSibling || p.isPartner) ? 0.35 : 0.65;
 
       if (!p.startKnown) {
         grad.append('stop').attr('offset', '0%').attr('stop-color', baseColor).attr('stop-opacity', 0);
@@ -274,7 +331,7 @@ export class TimelineView {
       }
 
       const name = getDisplayName(p.individual);
-      const nameColor = p.isSibling ? '#5a6a7a' : '#8a9ab0';
+      const nameColor = (p.isSibling || p.isPartner) ? '#5a6a7a' : '#8a9ab0';
       const lifeMid = (p.startYear + p.endYear) / 2;
 
       if (lifeMid > midYear) {

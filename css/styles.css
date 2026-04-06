@@ -105,6 +105,32 @@ body {
   max-width: 300px;
 }
 
+/* Navigation buttons (back/forward) */
+.nav-btn {
+  background: none;
+  border: 1px solid #0f3460;
+  color: #888;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  padding: 0;
+}
+
+.nav-btn:hover {
+  background: #0f3460;
+  color: #e0e0e0;
+}
+
+.nav-btn:active {
+  background: #1a4a80;
+}
+
 /* View switching buttons */
 .view-btn {
   background: none;

@@ -126,6 +126,11 @@ export class UI {
       return this._getSiblingRelationship(node);
     }
 
+    // Partners added by timeline: check in-law relationships
+    if (node.direction === 'partner') {
+      return this._getPartnerRelationship(node);
+    }
+
     if (node.generation === 0) return null; // is the center person
 
     // Ancestors via Ahnentafel number
@@ -142,6 +147,110 @@ export class UI {
       if (gen === 3) return sex === 'M' ? 'Urenkel' : sex === 'F' ? 'Urenkelin' : 'Urenkel';
       const prefix = 'Ur'.repeat(gen - 2);
       return sex === 'M' ? `${prefix}enkel` : sex === 'F' ? `${prefix}enkelin` : `${prefix}enkel`;
+    }
+
+    return null;
+  }
+
+  /**
+   * Determine relationship for a partner node.
+   * Checks who in the tree this person is married to,
+   * and derives the in-law relationship from that.
+   */
+  _getPartnerRelationship(node) {
+    const sex = node.individual.sex;
+    const data = this.app.data;
+    const flatTree = this.app.flatTree;
+    if (!data || !flatTree) return null;
+
+    const indi = node.individual;
+
+    // Find whom this partner is married to in the tree
+    for (const famId of indi.familiesAsSpouse || []) {
+      const fam = data.families.get(famId);
+      if (!fam) continue;
+      const spouseId = fam.husbandId === node.id ? fam.wifeId : fam.husbandId;
+      if (!spouseId) continue;
+
+      // Find spouse in tree nodes or sibling nodes
+      const spouseNode = flatTree.nodes.find(n => n.id === spouseId)
+        || flatTree.siblingNodes.find(n => n.id === spouseId);
+      if (!spouseNode) continue;
+
+      const spouseGen = spouseNode.generation;
+      const spouseDir = spouseNode.direction;
+
+      // Partner of center person (gen 0) = Ehemann/Ehefrau (already shown via main relationship)
+      if (spouseGen === 0 && spouseDir !== 'sibling') {
+        return sex === 'M' ? 'Ehemann' : sex === 'F' ? 'Ehefrau' : 'Partner';
+      }
+
+      // Partner of a sibling node = in-law relative
+      if (spouseDir === 'sibling') {
+        // Determine what generation the sibling is connected to
+        let sibConnectedGen = spouseNode.generation;
+        // For sibling nodes, generation reflects the connected tree node's generation
+        if (sibConnectedGen === 0) {
+          return sex === 'M' ? 'Schwager' : sex === 'F' ? 'Schwägerin' : 'Schwager/in';
+        }
+        if (sibConnectedGen === 1) {
+          return sex === 'M' ? 'Onkel (angeheiratet)' : sex === 'F' ? 'Tante (angeheiratet)' : 'Onkel/Tante (angeheiratet)';
+        }
+        if (sibConnectedGen >= 2) {
+          const prefix = sibConnectedGen === 2 ? 'Groß' : 'Ur'.repeat(sibConnectedGen - 2) + 'groß';
+          return sex === 'M' ? `${prefix}onkel (angeheiratet)` : sex === 'F' ? `${prefix}tante (angeheiratet)` : null;
+        }
+        return null;
+      }
+
+      // Partner of a child (gen -1) = Schwiegersohn/Schwiegertochter
+      if (spouseDir === 'descendant' && spouseGen === -1) {
+        return sex === 'M' ? 'Schwiegersohn' : sex === 'F' ? 'Schwiegertochter' : 'Schwiegerkind';
+      }
+
+      // Partner of a parent (gen 1, ancestor) = could be step-parent
+      // But usually this is the other parent already in tree
+      if (spouseDir === 'ancestor' && spouseGen === 1) {
+        return sex === 'M' ? 'Stiefvater' : sex === 'F' ? 'Stiefmutter' : 'Stiefelternteil';
+      }
+
+      // Partner of an uncle/aunt (sibling at gen 1) = angeheirateter Onkel/Tante
+      if (spouseDir === 'sibling') {
+        // Find the connected generation of the sibling-spouse
+        let connectedGen = spouseNode.generation;
+        if (connectedGen === 1) {
+          return sex === 'M' ? 'Onkel (angeheiratet)' : sex === 'F' ? 'Tante (angeheiratet)' : 'Onkel/Tante (angeheiratet)';
+        }
+      }
+
+      // Partner of grandchild = Schwieger-Enkel
+      if (spouseDir === 'descendant' && spouseGen === -2) {
+        return sex === 'M' ? 'Schwieger-Enkel' : sex === 'F' ? 'Schwieger-Enkelin' : 'Schwieger-Enkel';
+      }
+
+      // Generic: Partner of ancestor
+      if (spouseDir === 'ancestor' && spouseGen >= 2) {
+        return sex === 'M' ? 'Großvater (angeheiratet)' : sex === 'F' ? 'Großmutter (angeheiratet)' : 'Großelternteil (angeheiratet)';
+      }
+    }
+
+    // Also check: is this person a sibling of the center person's spouse?
+    // (= Schwager/Schwägerin via spouse's family)
+    const centerPerson = data.individuals.get(this.app.currentRootId);
+    if (centerPerson) {
+      for (const famId of centerPerson.familiesAsSpouse || []) {
+        const fam = data.families.get(famId);
+        if (!fam) continue;
+        const spouseId = fam.husbandId === this.app.currentRootId ? fam.wifeId : fam.husbandId;
+        if (!spouseId) continue;
+        const spouse = data.individuals.get(spouseId);
+        if (!spouse || !spouse.familyAsChild) continue;
+        const spouseFam = data.families.get(spouse.familyAsChild);
+        if (!spouseFam) continue;
+        if (spouseFam.childIds.includes(node.id)) {
+          return sex === 'M' ? 'Schwager' : sex === 'F' ? 'Schwägerin' : 'Schwager/in';
+        }
+      }
     }
 
     return null;
