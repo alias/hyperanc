@@ -150,7 +150,11 @@ export class TimelineView {
 
     // --- Person bars ---
     const barsGroup = svg.append('g');
+    const marriageOverlay = svg.append('g').attr('class', 'tl-marriage-overlay');
     const midYear = (minYear + maxYear) / 2;
+
+    // Map person id -> y position and x range for marriage lines
+    const personYMap = new Map();
 
     persons.forEach((p, i) => {
       const y = marginTop + 30 + i * (barHeight + barGap);
@@ -163,11 +167,17 @@ export class TimelineView {
       const totalW = x2 - x1;
       if (totalW < 2) return;
 
+      personYMap.set(p.id, { y, x1, x2, midY: y + barHeight / 2 });
+
       const g = barsGroup.append('g')
         .style('cursor', 'pointer')
         .on('click', () => this.app.selectPerson(p.id))
         .on('mouseenter', () => {
           this.app.ui.showTooltip(p.node, {});
+          this._showMarriageLine(p, personYMap, yearToX, marriageOverlay);
+        })
+        .on('mouseleave', () => {
+          marriageOverlay.selectAll('*').remove();
         });
 
       // Create per-person gradient for fade effects
@@ -252,5 +262,68 @@ export class TimelineView {
     // Adjust SVG height to actual content
     const actualHeight = marginTop + 30 + persons.length * (barHeight + barGap) + marginBottom;
     svg.attr('height', Math.max(height, actualHeight));
+  }
+
+  /**
+   * Draw a dashed yellow line between parents when hovering a child.
+   */
+  _showMarriageLine(person, personYMap, yearToX, overlay) {
+    overlay.selectAll('*').remove();
+
+    const indi = person.individual;
+    if (!indi.familyAsChild) return;
+
+    const { families, individuals } = this.app.data;
+    const fam = families.get(indi.familyAsChild);
+    if (!fam || !fam.husbandId || !fam.wifeId) return;
+
+    const fatherPos = personYMap.get(fam.husbandId);
+    const motherPos = personYMap.get(fam.wifeId);
+    if (!fatherPos || !motherPos) return;
+
+    // Find overlapping x range of both parents (their concurrent lifespan)
+    const overlapX1 = Math.max(fatherPos.x1, motherPos.x1);
+    const overlapX2 = Math.min(fatherPos.x2, motherPos.x2);
+
+    // Use marriage year as x position if available, otherwise midpoint of overlap
+    let lineX;
+    const marriageYear = fam.marriageDate ? fam.marriageDate.match(/\d{4}/) : null;
+    if (marriageYear) {
+      lineX = yearToX(parseInt(marriageYear[0]));
+    } else {
+      lineX = (overlapX1 + overlapX2) / 2;
+    }
+
+    // Draw dashed line from father's bar to mother's bar
+    const y1 = fatherPos.midY;
+    const y2 = motherPos.midY;
+
+    overlay.append('line')
+      .attr('x1', lineX).attr('x2', lineX)
+      .attr('y1', Math.min(y1, y2)).attr('y2', Math.max(y1, y2))
+      .attr('stroke', '#e8b84b')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '6 4')
+      .attr('stroke-opacity', 0.8);
+
+    // Marriage date label
+    const label = fam.marriageDate || '';
+    if (label) {
+      const labelY = (y1 + y2) / 2;
+      overlay.append('text')
+        .attr('x', lineX + 6).attr('y', labelY + 3)
+        .attr('fill', '#e8b84b')
+        .attr('font-size', '10px')
+        .attr('font-weight', '600')
+        .text(label);
+    }
+
+    // Small circles at connection points
+    overlay.append('circle')
+      .attr('cx', lineX).attr('cy', y1)
+      .attr('r', 3).attr('fill', '#e8b84b');
+    overlay.append('circle')
+      .attr('cx', lineX).attr('cy', y2)
+      .attr('r', 3).attr('fill', '#e8b84b');
   }
 }
