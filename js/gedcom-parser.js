@@ -166,6 +166,96 @@ export function parseGedcom(text) {
   return { individuals, families, homePersonId, version };
 }
 
+const MONTHS = { JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+  JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12' };
+
+/**
+ * Convert GEDCOM date to German format dd.MM.yyyy.
+ * Handles: "2 JUL 1934" -> "02.07.1934", "1965" -> "1965", "ABT 1800" -> "ca. 1800"
+ */
+export function formatDate(gedcomDate) {
+  if (!gedcomDate) return '';
+  let d = gedcomDate.trim();
+
+  // Handle prefixes
+  let prefix = '';
+  if (d.startsWith('ABT ')) { prefix = 'ca. '; d = d.substring(4); }
+  else if (d.startsWith('BEF ')) { prefix = 'vor '; d = d.substring(4); }
+  else if (d.startsWith('AFT ')) { prefix = 'nach '; d = d.substring(4); }
+  else if (d.startsWith('EST ')) { prefix = 'ca. '; d = d.substring(4); }
+  else if (d.startsWith('CAL ')) { prefix = 'ca. '; d = d.substring(4); }
+
+  // Full date: "2 JUL 1934" or "02 JUL 1934"
+  const full = d.match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/);
+  if (full) {
+    const day = full[1].padStart(2, '0');
+    const month = MONTHS[full[2]] || full[2];
+    return `${prefix}${day}.${month}.${full[3]}`;
+  }
+
+  // Month + year: "JUL 1934"
+  const monthYear = d.match(/^([A-Z]{3})\s+(\d{4})$/);
+  if (monthYear) {
+    const month = MONTHS[monthYear[1]] || monthYear[1];
+    return `${prefix}${month}.${monthYear[2]}`;
+  }
+
+  // Year only: "1934"
+  const yearOnly = d.match(/^(\d{4})$/);
+  if (yearOnly) {
+    return `${prefix}${yearOnly[1]}`;
+  }
+
+  // Fallback
+  return prefix + d;
+}
+
+/**
+ * Parse GEDCOM date to a JS Date (for age calculation).
+ * Returns Date or null.
+ */
+export function parseDate(gedcomDate) {
+  if (!gedcomDate) return null;
+  let d = gedcomDate.replace(/^(ABT|BEF|AFT|EST|CAL)\s+/, '');
+
+  const full = d.match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/);
+  if (full) {
+    const month = parseInt(MONTHS[full[2]] || '1') - 1;
+    return new Date(parseInt(full[3]), month, parseInt(full[1]));
+  }
+
+  const monthYear = d.match(/^([A-Z]{3})\s+(\d{4})$/);
+  if (monthYear) {
+    const month = parseInt(MONTHS[monthYear[1]] || '1') - 1;
+    return new Date(parseInt(monthYear[2]), month, 1);
+  }
+
+  const yearOnly = d.match(/^(\d{4})$/);
+  if (yearOnly) {
+    return new Date(parseInt(yearOnly[1]), 0, 1);
+  }
+
+  return null;
+}
+
+/**
+ * Calculate age in whole years.
+ * If death date given, age at death. Otherwise age today (if born before today).
+ * Returns number or null.
+ */
+export function getAge(individual) {
+  const birth = parseDate(individual.birthDate);
+  if (!birth) return null;
+
+  const end = parseDate(individual.deathDate) || new Date();
+  let age = end.getFullYear() - birth.getFullYear();
+  const monthDiff = end.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && end.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+}
+
 export function getDisplayName(individual) {
   const given = individual.givenName || '';
   const sur = individual.surname || '';
@@ -174,8 +264,8 @@ export function getDisplayName(individual) {
 }
 
 export function getLifespan(individual) {
-  const b = individual.birthDate || '';
-  const d = individual.deathDate || '';
+  const b = formatDate(individual.birthDate);
+  const d = formatDate(individual.deathDate);
   if (b && d) return `${b} - ${d}`;
   if (b) return `* ${b}`;
   if (d) return `+ ${d}`;

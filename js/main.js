@@ -41,7 +41,7 @@ class App {
     try {
       const response = await fetch('horst_bob.ged');
       const text = await response.text();
-      this.loadData(parseGedcom(text));
+      this.loadData(parseGedcom(text), 'horst_bob.ged');
     } catch (err) {
       console.log('No default GEDCOM found, showing load dialog');
       this._showLoadDialog();
@@ -69,7 +69,7 @@ class App {
     });
 
     // Drag&drop on canvas
-    setupDragDrop(container, (data) => this.loadData(data));
+    setupDragDrop(container, (data, file) => this.loadData(data, file?.name));
 
     // Timeline view
     this.timelineView = new TimelineView(document.getElementById('timeline-view'), this);
@@ -115,9 +115,11 @@ class App {
   /**
    * Load parsed GEDCOM data and initialize the view.
    */
-  loadData(data) {
+  loadData(data, filename) {
     this.data = data;
+    this.currentFileName = filename || '';
     console.log(`Parsed: ${data.individuals.size} Personen, ${data.families.size} Familien (GEDCOM ${data.version || '5.5.1'})`);
+    if (this.ui) this.ui.setFileName(this.currentFileName);
 
     const startId = data.homePersonId || data.individuals.keys().next().value;
     if (startId) {
@@ -159,8 +161,9 @@ class App {
       if (fileInput.files.length === 0) return;
       loadStatus.textContent = 'Lade...';
       try {
-        const data = await loadFromFile(fileInput.files[0]);
-        this.loadData(data);
+        const file = fileInput.files[0];
+        const data = await loadFromFile(file);
+        this.loadData(data, file.name);
         loadOverlay.style.display = 'none';
         loadStatus.textContent = '';
       } catch (err) {
@@ -175,7 +178,8 @@ class App {
       loadStatus.textContent = 'Lade von URL...';
       try {
         const data = await loadFromUrl(url);
-        this.loadData(data);
+        const urlName = url.split('/').pop() || url;
+        this.loadData(data, urlName);
         loadOverlay.style.display = 'none';
         loadStatus.textContent = '';
       } catch (err) {
@@ -203,7 +207,7 @@ class App {
         loadStatus.textContent = 'Lade...';
         try {
           const data = await loadFromFile(files[0]);
-          this.loadData(data);
+          this.loadData(data, files[0].name);
           loadOverlay.style.display = 'none';
         } catch (err) {
           loadStatus.textContent = 'Fehler: ' + err.message;

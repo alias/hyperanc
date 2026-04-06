@@ -4,7 +4,7 @@
  * Supports tree edges (solid) and sibling edges (dashed).
  */
 import { diskToScreen, geodesicPath, cAbs } from './hyperbolic-math.js';
-import { getDisplayName, getLifespan } from './gedcom-parser.js';
+import { getDisplayName, getLifespan, formatDate } from './gedcom-parser.js';
 
 export class Renderer {
   constructor(svgElement, width, height) {
@@ -368,7 +368,7 @@ export class Renderer {
       .attr('stroke-opacity', 0.8);
 
     // Marriage date label at midpoint of the arc
-    const marriageDate = fam.marriageDate || '';
+    const marriageDate = formatDate(fam.marriageDate) || '';
     const marriagePlace = fam.marriagePlace || '';
     let label = '';
     if (marriageDate && marriagePlace) label = `${marriageDate}, ${marriagePlace}`;

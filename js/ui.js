@@ -2,7 +2,7 @@
  * UI Components
  * Search, center info panel, hover tooltip, map view.
  */
-import { getDisplayName, getLifespan } from './gedcom-parser.js';
+import { getDisplayName, getLifespan, getAge, formatDate } from './gedcom-parser.js';
 import { geocode, collectPlaces } from './geocoder.js';
 import { MapView } from './map-view.js';
 
@@ -110,18 +110,20 @@ export class UI {
   }
 
   setRootPerson(individual) {
-    const name = getDisplayName(individual);
-    const lifespan = getLifespan(individual);
-    this.rootName.textContent = lifespan ? `${name} (${lifespan})` : name;
+    // Root name in header now shows file name, not person
+  }
+
+  setFileName(name) {
+    this.rootName.textContent = name || '';
   }
 
   /**
    * Determine the relationship label relative to the center person.
    */
   _getRelationship(node) {
-    // Siblings first (they can have generation 0 too)
+    // Siblings: determine whose sibling they are
     if (node.direction === 'sibling') {
-      return node.individual.sex === 'M' ? 'Bruder' : node.individual.sex === 'F' ? 'Schwester' : 'Geschwister';
+      return this._getSiblingRelationship(node);
     }
 
     if (node.generation === 0) return null; // is the center person
@@ -143,6 +145,64 @@ export class UI {
     }
 
     return null;
+  }
+
+  /**
+   * Determine the relationship for a sibling node.
+   * A sibling is connected to a tree node via siblingEdges.
+   * If that tree node is at generation 0, it's Bruder/Schwester.
+   * If generation 1 (parent), it's Onkel/Tante.
+   * If generation 2 (grandparent), it's Großonkel/Großtante, etc.
+   */
+  _getSiblingRelationship(node) {
+    const sex = node.individual.sex;
+    const flatTree = this.app.flatTree;
+    if (!flatTree) return sex === 'M' ? 'Bruder' : sex === 'F' ? 'Schwester' : 'Geschwister';
+
+    // Find which tree node this sibling is connected to
+    let connectedGen = 0;
+    for (const edge of flatTree.siblingEdges) {
+      const otherId = edge.source.id === node.id ? edge.target.id : edge.target.id === node.id ? edge.source.id : null;
+      if (!otherId) continue;
+      // Find the tree node (not sibling)
+      const otherNode = flatTree.nodes.find(n => n.id === otherId);
+      if (otherNode) {
+        connectedGen = otherNode.generation;
+        break;
+      }
+    }
+
+    // Generation 0 = sibling of center person
+    if (connectedGen === 0) {
+      return sex === 'M' ? 'Bruder' : sex === 'F' ? 'Schwester' : 'Geschwister';
+    }
+
+    // Generation 1 = sibling of parent = Onkel/Tante
+    if (connectedGen === 1) {
+      return sex === 'M' ? 'Onkel' : sex === 'F' ? 'Tante' : 'Onkel/Tante';
+    }
+
+    // Generation 2 = sibling of grandparent = Großonkel/Großtante
+    if (connectedGen === 2) {
+      return sex === 'M' ? 'Großonkel' : sex === 'F' ? 'Großtante' : 'Großonkel/-tante';
+    }
+
+    // Generation 3+ = Urgroßonkel etc.
+    if (connectedGen >= 3) {
+      const prefix = 'Ur'.repeat(connectedGen - 2);
+      return sex === 'M' ? `${prefix}großonkel` : sex === 'F' ? `${prefix}großtante` : `${prefix}großonkel/-tante`;
+    }
+
+    // Negative generation = sibling of a descendant = Neffe/Nichte etc.
+    if (connectedGen === -1) {
+      return sex === 'M' ? 'Neffe' : sex === 'F' ? 'Nichte' : 'Neffe/Nichte';
+    }
+    if (connectedGen <= -2) {
+      const prefix = 'Groß'.repeat(-connectedGen - 1);
+      return sex === 'M' ? `${prefix}neffe` : sex === 'F' ? `${prefix}nichte` : `${prefix}neffe/-nichte`;
+    }
+
+    return sex === 'M' ? 'Bruder' : sex === 'F' ? 'Schwester' : 'Geschwister';
   }
 
   /**
@@ -205,7 +265,11 @@ export class UI {
     }
 
     html += `<div class="tooltip-name">${name}</div>`;
-    if (lifespan) html += `<div class="tooltip-dates">${lifespan}</div>`;
+    if (lifespan) {
+      const age = getAge(indi);
+      const ageStr = age !== null ? ` (${age} Jahre)` : '';
+      html += `<div class="tooltip-dates">${lifespan}${ageStr}</div>`;
+    }
     if (indi.birthPlace) html += `<div class="tooltip-place">Geburtsort: ${indi.birthPlace}</div>`;
     if (indi.deathPlace) html += `<div class="tooltip-place">Sterbeort: ${indi.deathPlace}</div>`;
     if (indi.occupation) html += `<div class="tooltip-occ">Beruf: ${indi.occupation}</div>`;

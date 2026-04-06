@@ -2,7 +2,7 @@
  * Timeline View
  * Renders persons as horizontal bars on a time axis.
  */
-import { getDisplayName } from './gedcom-parser.js';
+import { getDisplayName, formatDate } from './gedcom-parser.js';
 
 function extractYear(dateStr) {
   if (!dateStr) return null;
@@ -262,7 +262,7 @@ export class TimelineView {
         g.append('text')
           .attr('x', x1 + 4).attr('y', y + barHeight - 4)
           .attr('fill', '#fff').attr('font-size', '9px')
-          .text(p.individual.birthDate || p.startYear);
+          .text(formatDate(p.individual.birthDate) || p.startYear);
       }
 
       if (p.endKnown && totalW > 60) {
@@ -270,7 +270,7 @@ export class TimelineView {
           .attr('x', x2 - 4).attr('y', y + barHeight - 4)
           .attr('text-anchor', 'end')
           .attr('fill', '#fff').attr('font-size', '9px')
-          .text(p.individual.deathDate || p.endYear);
+          .text(formatDate(p.individual.deathDate) || p.endYear);
       }
 
       const name = getDisplayName(p.individual);
@@ -328,7 +328,7 @@ export class TimelineView {
       .attr('stroke-dasharray', '6 4')
       .attr('stroke-opacity', 0.8);
 
-    const label = fam.marriageDate || '';
+    const label = formatDate(fam.marriageDate) || '';
     if (label) {
       const labelY = (y1 + y2) / 2;
       overlay.append('text')

@@ -5,7 +5,7 @@
  * Optionally includes siblings.
  */
 
-export function buildTree(rootId, individuals, families, maxAncestorGen = 20, maxDescendantGen = 5) {
+export function buildTree(rootId, individuals, families, maxAncestorGen = 20, maxDescendantGen = 10) {
   const visited = new Set();
 
   function buildAncestors(personId, generation, ahnNum) {

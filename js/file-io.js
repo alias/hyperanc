@@ -88,7 +88,7 @@ export function setupDragDrop(element, onLoad) {
       if (file.name.toLowerCase().endsWith('.ged')) {
         try {
           const data = await loadFromFile(file);
-          onLoad(data);
+          onLoad(data, file);
         } catch (err) {
           console.error('Drag&Drop Ladefehler:', err);
           alert('Fehler beim Laden der Datei: ' + err.message);
