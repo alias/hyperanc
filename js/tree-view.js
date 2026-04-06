@@ -376,45 +376,42 @@ export class TreeView {
     }
 
     // --- Time axis on the left ---
-    // Collect Y positions and average lifespan year per row
-    const rowData = new Map(); // y -> { years: [], y }
+    // Collect birth/death years per row, then compute generation midpoint
+    const rowData = new Map(); // y -> { births: [], deaths: [], y }
+    const currentYear = new Date().getFullYear();
 
-    // Helper: extract mid-life year
-    const midLifeYear = (indi) => {
-      const bMatch = indi.birthDate ? indi.birthDate.match(/\d{4}/) : null;
-      const dMatch = indi.deathDate ? indi.deathDate.match(/\d{4}/) : null;
-      const b = bMatch ? parseInt(bMatch[0]) : null;
-      const d = dMatch ? parseInt(dMatch[0]) : null;
-      if (b && d) return Math.round((b + d) / 2);
-      if (b) return b;
-      if (d) return d;
-      return null;
+    const extractYear = (dateStr) => {
+      if (!dateStr) return null;
+      const m = dateStr.match(/(\d{4})/);
+      return m ? parseInt(m[1]) : null;
     };
 
-    // Center person row
-    const centerMid = midLifeYear(rootIndi);
-    if (centerMid) {
-      if (!rowData.has(centerY)) rowData.set(centerY, { years: [], y: centerY });
-      rowData.get(centerY).years.push(centerMid);
-    }
-
-    // Ancestor rows
-    for (const [, pos] of ancestorPositions) {
-      const mid = midLifeYear(pos.node.individual);
-      if (mid) {
-        if (!rowData.has(pos.y)) rowData.set(pos.y, { years: [], y: pos.y });
-        rowData.get(pos.y).years.push(mid);
+    const addToRow = (y, indi) => {
+      if (!rowData.has(y)) rowData.set(y, { births: [], deaths: [], y });
+      const row = rowData.get(y);
+      const b = extractYear(indi.birthDate);
+      const d = extractYear(indi.deathDate);
+      if (b) row.births.push(b);
+      if (d) {
+        row.deaths.push(d);
+      } else if (b && (currentYear - b) < 120) {
+        // Still alive: use current year as end
+        row.deaths.push(currentYear);
       }
+    };
+
+    // Center person
+    addToRow(centerY, rootIndi);
+
+    // Ancestors
+    for (const [, pos] of ancestorPositions) {
+      addToRow(pos.y, pos.node.individual);
     }
 
-    // Descendant rows
+    // Descendants
     for (const [id, pos] of descPositions || new Map()) {
       if (id === rootId) continue;
-      const mid = midLifeYear(pos.node.individual);
-      if (mid) {
-        if (!rowData.has(pos.y)) rowData.set(pos.y, { years: [], y: pos.y });
-        rowData.get(pos.y).years.push(mid);
-      }
+      addToRow(pos.y, pos.node.individual);
     }
 
     // Draw time axis in the separate left panel
@@ -499,7 +496,19 @@ export class TreeView {
       .attr('stroke', '#334155').attr('stroke-width', 1);
 
     for (const row of rows) {
-      const avg = Math.round(row.years.reduce((s, y) => s + y, 0) / row.years.length);
+      // Compute average midpoint of lifespan for this generation
+      const births = row.births;
+      const deaths = row.deaths;
+      // Average birth year (fallback: use deaths avg - 40)
+      const avgBirth = births.length > 0
+        ? births.reduce((s, y) => s + y, 0) / births.length
+        : deaths.length > 0 ? deaths.reduce((s, y) => s + y, 0) / deaths.length - 40 : null;
+      // Average death year (fallback: use births avg + 40)
+      const avgDeath = deaths.length > 0
+        ? deaths.reduce((s, y) => s + y, 0) / deaths.length
+        : births.length > 0 ? births.reduce((s, y) => s + y, 0) / births.length + 40 : null;
+      if (avgBirth === null && avgDeath === null) continue;
+      const avg = Math.round(((avgBirth || avgDeath) + (avgDeath || avgBirth)) / 2);
       const tickY = row.y + CARD_H / 2;
 
       g.append('line')
