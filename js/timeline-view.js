@@ -4,20 +4,12 @@
  */
 import { getDisplayName } from './gedcom-parser.js';
 
-/**
- * Extract a year from a GEDCOM date string.
- * Returns number or null.
- */
 function extractYear(dateStr) {
   if (!dateStr) return null;
   const m = dateStr.match(/(\d{4})/);
   return m ? parseInt(m[1]) : null;
 }
 
-/**
- * Estimate a year range for display purposes.
- * Returns { startYear, endYear, startKnown, endKnown }
- */
 function getLifeRange(indi) {
   const birthYear = extractYear(indi.birthDate);
   const deathYear = extractYear(indi.deathDate);
@@ -27,10 +19,8 @@ function getLifeRange(indi) {
   let startKnown = !!birthYear;
   let endKnown = !!deathYear;
 
-  // If neither is known, skip this person
   if (!startYear && !endYear) return null;
 
-  // Estimate missing dates: use 50 years for unknown start/end
   if (!startYear && endYear) {
     startYear = endYear - 50;
     startKnown = false;
@@ -48,7 +38,6 @@ export class TimelineView {
     this.container = container;
     this.inner = container.querySelector('.timeline-inner');
     this.app = app;
-    this.svg = null;
   }
 
   render() {
@@ -57,12 +46,12 @@ export class TimelineView {
 
     const { individuals, families } = this.app.data;
 
-    // Collect all persons in the current tree with date ranges
+    // Collect persons
     const persons = [];
     const treeNodes = this.app.flatTree ? this.app.flatTree.nodes : [];
-    const nodeIds = new Set(treeNodes.map(n => n.id));
+    const siblingNodes = (this.app.showSiblings && this.app.flatTree) ? this.app.flatTree.siblingNodes : [];
 
-    for (const node of treeNodes) {
+    for (const node of [...treeNodes, ...siblingNodes]) {
       const indi = node.individual;
       const range = getLifeRange(indi);
       if (!range) continue;
@@ -70,23 +59,22 @@ export class TimelineView {
         id: node.id,
         individual: indi,
         node,
+        isSibling: node.direction === 'sibling',
         ...range
       });
     }
 
     if (persons.length === 0) return;
 
-    // Determine global time range
+    // Time range
     let minYear = Infinity, maxYear = -Infinity;
     for (const p of persons) {
       if (p.startYear < minYear) minYear = p.startYear;
       if (p.endYear > maxYear) maxYear = p.endYear;
     }
-    // Add padding
-    minYear = Math.floor(minYear / 10) * 10 - 10;
-    maxYear = Math.ceil(maxYear / 10) * 10 + 10;
+    minYear = Math.floor(minYear / 25) * 25 - 25;
+    maxYear = Math.ceil(maxYear / 25) * 25 + 25;
 
-    // Sort by birth year then by generation
     persons.sort((a, b) => a.startYear - b.startYear);
 
     // Layout
@@ -95,69 +83,120 @@ export class TimelineView {
     const height = rect.height;
     const marginLeft = 40;
     const marginRight = 40;
-    const marginTop = 30;
-    const marginBottom = 30;
+    const axisHeight = 32;
     const barHeight = 16;
     const barGap = 4;
-    const nameWidth = 140;
+    const barStartY = 8;
 
     const plotWidth = width - marginLeft - marginRight;
     const yearToX = (year) => marginLeft + (year - minYear) / (maxYear - minYear) * plotWidth;
-    const totalBarsHeight = persons.length * (barHeight + barGap);
-    const svgHeight = Math.max(height, totalBarsHeight + marginTop + marginBottom);
+    const xToYear = (x) => minYear + (x - marginLeft) / plotWidth * (maxYear - minYear);
+    const totalBarsHeight = persons.length * (barHeight + barGap) + barStartY + 20;
+    const midYear = (minYear + maxYear) / 2;
 
-    // Create SVG
-    const svg = d3.select(this.inner).append('svg')
+    // --- Fixed axis overlay ---
+    const axisSvg = d3.select(this.inner).append('svg')
+      .attr('class', 'tl-axis')
       .attr('width', width)
-      .attr('height', svgHeight)
-      .style('display', 'block');
+      .attr('height', axisHeight)
+      .style('position', 'sticky')
+      .style('top', '0')
+      .style('z-index', '5')
+      .style('background', 'rgba(13, 27, 42, 0.95)');
 
-    const defs = svg.append('defs');
-
-    // Fade-out gradients for unknown dates
-    // Per-person gradients will be created dynamically below
-
-    // --- Time axis ---
-    const axisY = marginTop + 10;
+    const axisY = axisHeight - 6;
 
     // Axis line
-    svg.append('line')
+    axisSvg.append('line')
       .attr('x1', marginLeft).attr('x2', width - marginRight)
       .attr('y1', axisY).attr('y2', axisY)
       .attr('stroke', '#334155').attr('stroke-width', 1);
 
-    // Ticks every 10 years
-    for (let year = minYear; year <= maxYear; year += 10) {
+    // Ticks every 25 years
+    for (let year = minYear; year <= maxYear; year += 25) {
       const x = yearToX(year);
-      svg.append('line')
+      axisSvg.append('line')
         .attr('x1', x).attr('x2', x)
-        .attr('y1', axisY - 6).attr('y2', axisY + 6)
+        .attr('y1', axisY - 5).attr('y2', axisY + 2)
         .attr('stroke', '#4a6580').attr('stroke-width', 1);
 
-      svg.append('text')
-        .attr('x', x).attr('y', axisY - 10)
+      axisSvg.append('text')
+        .attr('x', x).attr('y', axisY - 8)
         .attr('text-anchor', 'middle')
         .attr('fill', '#5a7a9a').attr('font-size', '10px')
         .text(year);
+    }
 
-      // Vertical gridline
+    // --- Scrollable bars SVG ---
+    const svg = d3.select(this.inner).append('svg')
+      .attr('width', width)
+      .attr('height', totalBarsHeight)
+      .style('display', 'block');
+
+    const defs = svg.append('defs');
+
+    // Vertical gridlines every 25 years
+    for (let year = minYear; year <= maxYear; year += 25) {
+      const x = yearToX(year);
       svg.append('line')
         .attr('x1', x).attr('x2', x)
-        .attr('y1', axisY + 10)
-        .attr('y2', svgHeight - marginBottom)
+        .attr('y1', 0).attr('y2', totalBarsHeight)
         .attr('stroke', '#1a2a3e').attr('stroke-width', 1);
     }
+
+    // --- Crosshair line ---
+    const crosshair = svg.append('line')
+      .attr('class', 'tl-crosshair')
+      .attr('y1', 0).attr('y2', totalBarsHeight)
+      .attr('stroke', '#e8b84b').attr('stroke-width', 1)
+      .attr('stroke-opacity', 0)
+      .attr('pointer-events', 'none');
+
+    const axisCrosshair = axisSvg.append('line')
+      .attr('class', 'tl-axis-crosshair')
+      .attr('y1', 0).attr('y2', axisHeight)
+      .attr('stroke', '#e8b84b').attr('stroke-width', 1)
+      .attr('stroke-opacity', 0)
+      .attr('pointer-events', 'none');
+
+    // Year label on crosshair
+    const crosshairLabel = axisSvg.append('text')
+      .attr('class', 'tl-crosshair-label')
+      .attr('y', axisY - 18)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#e8b84b').attr('font-size', '10px').attr('font-weight', '600')
+      .attr('opacity', 0);
+
+    // Mouse tracking on the whole inner container
+    const innerEl = this.inner;
+    innerEl.addEventListener('mousemove', (e) => {
+      const r = innerEl.getBoundingClientRect();
+      const mx = e.clientX - r.left;
+      if (mx >= marginLeft && mx <= width - marginRight) {
+        crosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
+        axisCrosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
+        const year = Math.round(xToYear(mx));
+        crosshairLabel.attr('x', mx).text(year).attr('opacity', 1);
+      } else {
+        crosshair.attr('stroke-opacity', 0);
+        axisCrosshair.attr('stroke-opacity', 0);
+        crosshairLabel.attr('opacity', 0);
+      }
+    });
+
+    innerEl.addEventListener('mouseleave', () => {
+      crosshair.attr('stroke-opacity', 0);
+      axisCrosshair.attr('stroke-opacity', 0);
+      crosshairLabel.attr('opacity', 0);
+    });
 
     // --- Person bars ---
     const barsGroup = svg.append('g');
     const marriageOverlay = svg.append('g').attr('class', 'tl-marriage-overlay');
-    const midYear = (minYear + maxYear) / 2;
-
-    // Map person id -> y position and x range for marriage lines
     const personYMap = new Map();
 
     persons.forEach((p, i) => {
-      const y = marginTop + 30 + i * (barHeight + barGap);
+      const y = barStartY + i * (barHeight + barGap);
       const isFemale = p.individual.sex === 'F';
       const baseColor = isFemale ? '#e94560' : '#4da8da';
       const isCenter = p.node.generation === 0 && p.node.direction !== 'sibling';
@@ -180,16 +219,15 @@ export class TimelineView {
           marriageOverlay.selectAll('*').remove();
         });
 
-      // Create per-person gradient for fade effects
+      // Per-person gradient
       const gradId = `tl-bar-${i}`;
       const grad = defs.append('linearGradient')
         .attr('id', gradId)
         .attr('x1', '0%').attr('x2', '100%');
 
-      const opacity = isCenter ? 0.9 : 0.65;
+      const opacity = isCenter ? 0.9 : p.isSibling ? 0.35 : 0.65;
 
       if (!p.startKnown) {
-        // Fade in from transparent
         grad.append('stop').attr('offset', '0%').attr('stop-color', baseColor).attr('stop-opacity', 0);
         grad.append('stop').attr('offset', '20%').attr('stop-color', baseColor).attr('stop-opacity', opacity);
       } else {
@@ -197,21 +235,18 @@ export class TimelineView {
       }
 
       if (!p.endKnown) {
-        // Fade out to transparent
         grad.append('stop').attr('offset', '80%').attr('stop-color', baseColor).attr('stop-opacity', opacity);
         grad.append('stop').attr('offset', '100%').attr('stop-color', baseColor).attr('stop-opacity', 0);
       } else {
         grad.append('stop').attr('offset', '100%').attr('stop-color', baseColor).attr('stop-opacity', opacity);
       }
 
-      // Single bar rect with gradient
       g.append('rect')
         .attr('x', x1).attr('y', y)
         .attr('width', totalW).attr('height', barHeight)
         .attr('rx', 3).attr('ry', 3)
         .attr('fill', `url(#${gradId})`);
 
-      // Center person highlight border
       if (isCenter) {
         g.append('rect')
           .attr('x', x1).attr('y', y)
@@ -221,7 +256,6 @@ export class TimelineView {
           .attr('stroke', '#d4a017').attr('stroke-width', 1.5);
       }
 
-      // Birth date label (left inside bar)
       if (p.startKnown && totalW > 60) {
         g.append('text')
           .attr('x', x1 + 4).attr('y', y + barHeight - 4)
@@ -229,7 +263,6 @@ export class TimelineView {
           .text(p.individual.birthDate || p.startYear);
       }
 
-      // Death date label (right inside bar)
       if (p.endKnown && totalW > 60) {
         g.append('text')
           .attr('x', x2 - 4).attr('y', y + barHeight - 4)
@@ -238,42 +271,33 @@ export class TimelineView {
           .text(p.individual.deathDate || p.endYear);
       }
 
-      // Name label - left of bar if young (center of lifespan > midYear), right if old
-      const lifeMid = (p.startYear + p.endYear) / 2;
       const name = getDisplayName(p.individual);
+      const nameColor = p.isSibling ? '#5a6a7a' : '#8a9ab0';
+      const lifeMid = (p.startYear + p.endYear) / 2;
 
       if (lifeMid > midYear) {
-        // Name on the left
         g.append('text')
           .attr('x', x1 - 4).attr('y', y + barHeight - 3)
           .attr('text-anchor', 'end')
-          .attr('fill', '#8a9ab0').attr('font-size', '10px')
+          .attr('fill', nameColor).attr('font-size', '10px')
           .text(name);
       } else {
-        // Name on the right
         g.append('text')
           .attr('x', x2 + 4).attr('y', y + barHeight - 3)
           .attr('text-anchor', 'start')
-          .attr('fill', '#8a9ab0').attr('font-size', '10px')
+          .attr('fill', nameColor).attr('font-size', '10px')
           .text(name);
       }
     });
-
-    // Adjust SVG height to actual content
-    const actualHeight = marginTop + 30 + persons.length * (barHeight + barGap) + marginBottom;
-    svg.attr('height', Math.max(height, actualHeight));
   }
 
-  /**
-   * Draw a dashed yellow line between parents when hovering a child.
-   */
   _showMarriageLine(person, personYMap, yearToX, overlay) {
     overlay.selectAll('*').remove();
 
     const indi = person.individual;
     if (!indi.familyAsChild) return;
 
-    const { families, individuals } = this.app.data;
+    const { families } = this.app.data;
     const fam = families.get(indi.familyAsChild);
     if (!fam || !fam.husbandId || !fam.wifeId) return;
 
@@ -281,20 +305,16 @@ export class TimelineView {
     const motherPos = personYMap.get(fam.wifeId);
     if (!fatherPos || !motherPos) return;
 
-    // Find overlapping x range of both parents (their concurrent lifespan)
-    const overlapX1 = Math.max(fatherPos.x1, motherPos.x1);
-    const overlapX2 = Math.min(fatherPos.x2, motherPos.x2);
-
-    // Use marriage year as x position if available, otherwise midpoint of overlap
     let lineX;
     const marriageYear = fam.marriageDate ? fam.marriageDate.match(/\d{4}/) : null;
     if (marriageYear) {
       lineX = yearToX(parseInt(marriageYear[0]));
     } else {
+      const overlapX1 = Math.max(fatherPos.x1, motherPos.x1);
+      const overlapX2 = Math.min(fatherPos.x2, motherPos.x2);
       lineX = (overlapX1 + overlapX2) / 2;
     }
 
-    // Draw dashed line from father's bar to mother's bar
     const y1 = fatherPos.midY;
     const y2 = motherPos.midY;
 
@@ -306,7 +326,6 @@ export class TimelineView {
       .attr('stroke-dasharray', '6 4')
       .attr('stroke-opacity', 0.8);
 
-    // Marriage date label
     const label = fam.marriageDate || '';
     if (label) {
       const labelY = (y1 + y2) / 2;
@@ -318,7 +337,6 @@ export class TimelineView {
         .text(label);
     }
 
-    // Small circles at connection points
     overlay.append('circle')
       .attr('cx', lineX).attr('cy', y1)
       .attr('r', 3).attr('fill', '#e8b84b');
