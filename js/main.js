@@ -106,7 +106,11 @@ class App {
         btn.classList.toggle('active', name === viewName);
       }
       for (const [name, el] of Object.entries(views)) {
-        el.style.display = name === viewName ? (name === 'hyper' ? 'block' : 'block') : 'none';
+        if (name === viewName) {
+          el.style.display = name === 'baum' ? 'flex' : 'block';
+        } else {
+          el.style.display = 'none';
+        }
       }
       this.render();
     };

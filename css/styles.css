@@ -272,11 +272,32 @@ body {
   overflow: hidden;
 }
 
-.tree-inner {
-  width: 100%;
+#tree-view {
+  display: none;
+  flex-direction: row;
+}
+
+#tree-view.active-view {
+  display: flex;
+}
+
+.tree-time-axis {
+  width: 70px;
+  min-width: 70px;
   height: 100%;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
+  border-right: 1px solid #0f3460;
+  background: rgba(13, 27, 42, 0.5);
+  border-radius: 20px 0 0 20px;
+}
+
+.tree-inner {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  border-radius: 0 20px 20px 0;
 }
 
 @media (max-width: 1200px) {

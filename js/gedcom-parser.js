@@ -253,7 +253,8 @@ export function getAge(individual) {
   if (monthDiff < 0 || (monthDiff === 0 && end.getDate() < birth.getDate())) {
     age--;
   }
-  return age >= 0 ? age : null;
+  if (age < 0 || age > 120) return null;
+  return age;
 }
 
 export function getDisplayName(individual) {

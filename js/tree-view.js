@@ -12,6 +12,24 @@ const H_GAP = 12;
 const V_GAP = 28;
 const ROW_H = CARD_H + V_GAP;
 
+/**
+ * Shorten a full name for tree cards:
+ * "Horst Adolf Hans Stiewe" -> "Horst A. H. Stiewe"
+ */
+function shortName(individual) {
+  const given = individual.givenName || '';
+  const surname = individual.surname || '';
+  const parts = given.split(/\s+/).filter(Boolean);
+  let short;
+  if (parts.length > 1) {
+    short = parts[0] + ' ' + parts.slice(1).map(p => p[0] + '.').join(' ');
+  } else {
+    short = given;
+  }
+  if (surname) short += ' ' + surname;
+  return short || '(Unbekannt)';
+}
+
 export class TreeView {
   constructor(container, app) {
     this.container = container;
@@ -155,19 +173,30 @@ export class TreeView {
         const mp = ancestorPositions.get(node.mother.id + '_' + (depth + 1));
         if (mp) this._renderConnector(linesGroup, x, y + CARD_H, mp.x, mp.y);
       }
+
+      // Continuation indicator DOWN: leaf ancestor that has parents not shown
+      if (!node.father && !node.mother && node.individual.familyAsChild) {
+        this._renderContinuation(linesGroup, x, y + CARD_H, 'down');
+      }
+    }
+
+    // Also check center person for continuation DOWN (has parents = always shown, so skip)
+    // And continuation UP if center has children beyond desc limit
+    if (rootIndi.familiesAsSpouse && rootIndi.familiesAsSpouse.length > 0) {
+      const descTree2 = this._buildDescendantTree(rootId, individuals, families, 0, 3);
+      // Check if any desc leaf at max depth has further children
+      // (already handled per-node above)
     }
 
     // --- Render descendants above center as a proper tree ---
     const descTree = this._buildDescendantTree(rootId, individuals, families, 0, 3);
+    const descPositions = new Map();
     if (descTree && descTree.children.length > 0) {
-      // Count leaves for width calculation
       const descLeafCount = this._countDescLeaves(descTree);
       const descWidth = descLeafCount * (CARD_W + H_GAP);
-      const descMaxDepth = this._descMaxDepth(descTree);
+      const descMaxDepthCalc = this._descMaxDepth(descTree);
 
-      // Assign positions bottom-up (leaves at the top)
       let descLeafIdx = 0;
-      const descPositions = new Map();
 
       const assignDescPos = (node, depth) => {
         if (!node) return;
@@ -209,7 +238,7 @@ export class TreeView {
 
       // Render descendant cards and connectors (skip root = center person)
       for (const [id, pos] of descPositions) {
-        if (id === rootId) continue; // already rendered
+        if (id === rootId) continue;
         const { x, y, node, depth } = pos;
         const indi = node.individual;
         this._renderCard(cardsGroup, { id, individual: indi, depth: 0 }, x - CARD_W / 2, y, false);
@@ -219,6 +248,17 @@ export class TreeView {
           const parentPos = descPositions.get(node.parentId);
           if (parentPos) {
             this._renderConnector(linesGroup, x, y + CARD_H, parentPos.x, parentPos.y, true);
+          }
+        }
+
+        // Continuation indicator UP: leaf descendant that has children not shown
+        if (node.children.length === 0) {
+          const hasMoreChildren = (indi.familiesAsSpouse || []).some(fid => {
+            const f = families.get(fid);
+            return f && f.childIds.length > 0;
+          });
+          if (hasMoreChildren) {
+            this._renderContinuation(linesGroup, x, y, 'up');
           }
         }
       }
@@ -232,7 +272,7 @@ export class TreeView {
         const sx = sibX + i * (CARD_W * 0.6 + 8);
         const sy = centerY + (CARD_H - 24) / 2;
         const isFemale = sib.sex === 'F';
-        const name = getDisplayName(sib);
+        const name = shortName(sib);
         const sibW = CARD_W * 0.6;
 
         const g = cardsGroup.append('g')
@@ -287,7 +327,7 @@ export class TreeView {
           const px = centerX - CARD_W / 2 - H_GAP - 20 - i * (partnerW + 8) - partnerW;
           const py = centerY + (CARD_H - 24) / 2;
           const isFemale = partner.individual.sex === 'F';
-          const name = getDisplayName(partner.individual);
+          const name = shortName(partner.individual);
           const yearMatch = partner.marriageDate ? partner.marriageDate.match(/\d{4}/) : null;
           const yearLabel = yearMatch ? yearMatch[0] : '';
 
@@ -335,6 +375,52 @@ export class TreeView {
       }
     }
 
+    // --- Time axis on the left ---
+    // Collect Y positions and average lifespan year per row
+    const rowData = new Map(); // y -> { years: [], y }
+
+    // Helper: extract mid-life year
+    const midLifeYear = (indi) => {
+      const bMatch = indi.birthDate ? indi.birthDate.match(/\d{4}/) : null;
+      const dMatch = indi.deathDate ? indi.deathDate.match(/\d{4}/) : null;
+      const b = bMatch ? parseInt(bMatch[0]) : null;
+      const d = dMatch ? parseInt(dMatch[0]) : null;
+      if (b && d) return Math.round((b + d) / 2);
+      if (b) return b;
+      if (d) return d;
+      return null;
+    };
+
+    // Center person row
+    const centerMid = midLifeYear(rootIndi);
+    if (centerMid) {
+      if (!rowData.has(centerY)) rowData.set(centerY, { years: [], y: centerY });
+      rowData.get(centerY).years.push(centerMid);
+    }
+
+    // Ancestor rows
+    for (const [, pos] of ancestorPositions) {
+      const mid = midLifeYear(pos.node.individual);
+      if (mid) {
+        if (!rowData.has(pos.y)) rowData.set(pos.y, { years: [], y: pos.y });
+        rowData.get(pos.y).years.push(mid);
+      }
+    }
+
+    // Descendant rows
+    for (const [id, pos] of descPositions || new Map()) {
+      if (id === rootId) continue;
+      const mid = midLifeYear(pos.node.individual);
+      if (mid) {
+        if (!rowData.has(pos.y)) rowData.set(pos.y, { years: [], y: pos.y });
+        rowData.get(pos.y).years.push(mid);
+      }
+    }
+
+    // Draw time axis in the separate left panel
+    const rows = [...rowData.values()].sort((a, b) => a.y - b.y);
+    this._timeAxisRows = rows;
+
     // Measure actual bounding box and adjust SVG
     const bbox = contentGroup.node().getBBox();
     const padding = 30;
@@ -346,6 +432,8 @@ export class TreeView {
     const shiftY = -bbox.y + padding;
     contentGroup.attr('transform', `translate(${shiftX}, ${shiftY})`);
 
+    this._shiftY = shiftY;
+
     svg.attr('width', finalW).attr('height', finalH);
 
     // Center the view on the root person via transform
@@ -355,8 +443,85 @@ export class TreeView {
     this._panY = rect.height / 3 - adjustedCenterY;
     svg.style.transform = `translate(${this._panX}px, ${this._panY}px)`;
 
+    // Render time axis in the left panel
+    this._renderTimeAxis();
+
     // Drag-to-pan
     this._setupDragPan();
+  }
+
+  _renderContinuation(group, x, y, direction) {
+    // Short green line + small arrow indicating more data exists
+    const len = 14;
+    if (direction === 'down') {
+      // Below the card: more ancestors exist
+      group.append('line')
+        .attr('x1', x).attr('x2', x)
+        .attr('y1', y).attr('y2', y + len)
+        .attr('stroke', '#4caf50').attr('stroke-width', 2)
+        .attr('stroke-linecap', 'round').attr('opacity', 0.5);
+      group.append('path')
+        .attr('d', `M ${x - 4} ${y + len} L ${x} ${y + len + 6} L ${x + 4} ${y + len} Z`)
+        .attr('fill', '#4caf50').attr('opacity', 0.5);
+    } else {
+      group.append('line')
+        .attr('x1', x).attr('x2', x)
+        .attr('y1', y).attr('y2', y - len)
+        .attr('stroke', '#4caf50').attr('stroke-width', 2)
+        .attr('stroke-linecap', 'round').attr('opacity', 0.5);
+      group.append('path')
+        .attr('d', `M ${x - 4} ${y - len} L ${x} ${y - len - 6} L ${x + 4} ${y - len} Z`)
+        .attr('fill', '#4caf50').attr('opacity', 0.5);
+    }
+  }
+
+  _renderTimeAxis() {
+    const axisEl = this.container.querySelector('.tree-time-axis');
+    if (!axisEl) return;
+    axisEl.innerHTML = '';
+
+    const rows = this._timeAxisRows;
+    if (!rows || rows.length < 1) return;
+
+    const h = axisEl.clientHeight || 800;
+    const axisSvg = d3.select(axisEl).append('svg')
+      .attr('width', 70).attr('height', 4000)
+      .style('display', 'block');
+
+    this._axisSvgGroup = axisSvg.append('g');
+    const g = this._axisSvgGroup;
+    const axisX = 55;
+
+    g.append('line')
+      .attr('x1', axisX).attr('x2', axisX)
+      .attr('y1', rows[0].y + CARD_H / 2)
+      .attr('y2', rows[rows.length - 1].y + CARD_H / 2)
+      .attr('stroke', '#334155').attr('stroke-width', 1);
+
+    for (const row of rows) {
+      const avg = Math.round(row.years.reduce((s, y) => s + y, 0) / row.years.length);
+      const tickY = row.y + CARD_H / 2;
+
+      g.append('line')
+        .attr('x1', axisX - 5).attr('x2', axisX + 5)
+        .attr('y1', tickY).attr('y2', tickY)
+        .attr('stroke', '#4a6580').attr('stroke-width', 1);
+
+      g.append('text')
+        .attr('x', axisX - 8).attr('y', tickY + 4)
+        .attr('text-anchor', 'end')
+        .attr('fill', '#5a7a9a').attr('font-size', '10px')
+        .text(`~ ${avg}`);
+    }
+
+    // Apply initial vertical offset matching tree pan
+    this._updateTimeAxisPosition();
+  }
+
+  _updateTimeAxisPosition() {
+    if (!this._axisSvgGroup) return;
+    const offsetY = (this._shiftY || 0) + (this._panY || 0);
+    this._axisSvgGroup.attr('transform', `translate(0, ${offsetY})`);
   }
 
   _setupDragPan() {
@@ -393,6 +558,7 @@ export class TreeView {
       startX = mx;
       startY = my;
       applyTransform();
+      this._updateTimeAxisPosition();
     };
 
     const onUp = () => {
@@ -511,7 +677,7 @@ export class TreeView {
   _renderCard(group, node, x, y, isCenter) {
     const indi = node.individual;
     const isFemale = indi.sex === 'F';
-    const name = getDisplayName(indi);
+    const name = shortName(indi);
     const birth = formatDate(indi.birthDate);
     const death = formatDate(indi.deathDate);
     const age = getAge(indi);

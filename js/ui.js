@@ -498,6 +498,23 @@ export class UI {
       if (spouseParts.length > 0) {
         html += `<div class="tooltip-family"><div class="family-label">Partner:</div>${spouseParts.join('')}</div>`;
       }
+
+      // Children (from all families)
+      const childParts = [];
+      for (const famId of indi.familiesAsSpouse) {
+        const fam = data.families.get(famId);
+        if (!fam) continue;
+        for (const childId of fam.childIds) {
+          const child = data.individuals.get(childId);
+          if (!child) continue;
+          const rel = child.sex === 'M' ? 'Sohn' : child.sex === 'F' ? 'Tochter' : '';
+          const prefix = rel ? `${rel}: ` : '';
+          childParts.push(`<span class="person-link" data-id="${childId}">${prefix}${getDisplayName(child)}</span>`);
+        }
+      }
+      if (childParts.length > 0) {
+        html += `<div class="tooltip-family"><div class="family-label">${childParts.length} Kinder:</div>${childParts.join('')}</div>`;
+      }
     }
 
     return html;
