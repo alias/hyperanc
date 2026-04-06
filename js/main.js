@@ -11,6 +11,7 @@ import { Interaction } from './interaction.js';
 import { UI } from './ui.js';
 import { cAbs } from './hyperbolic-math.js';
 import { loadFromFile, loadFromUrl, saveToFile, setupDragDrop } from './file-io.js';
+import { TimelineView } from './timeline-view.js';
 
 class App {
   constructor() {
@@ -26,6 +27,7 @@ class App {
     this.transformFn = z => z;
     this.showSiblings = false;
     this._viewInitialized = false;
+    this.timelineView = null;
   }
 
   async init() {
@@ -69,6 +71,9 @@ class App {
     // Drag&drop on canvas
     setupDragDrop(container, (data) => this.loadData(data));
 
+    // Timeline view
+    this.timelineView = new TimelineView(document.getElementById('timeline-view'), this);
+
     // View switching
     this.currentView = 'hyper';
     this._setupViewSwitching();
@@ -102,7 +107,9 @@ class App {
   }
 
   renderTimeline() {
-    // Placeholder - timeline rendering will be implemented later
+    if (this.timelineView && this.data) {
+      this.timelineView.render();
+    }
   }
 
   /**
@@ -335,6 +342,11 @@ class App {
 
   render() {
     if (!this.flatTree || !this.positions) return;
+
+    if (this.currentView === 'timeline') {
+      this.renderTimeline();
+      return;
+    }
 
     const allNodes = [...this.flatTree.nodes, ...this.flatTree.siblingNodes];
 
