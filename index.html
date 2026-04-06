@@ -18,6 +18,8 @@
     </div>
     <div class="header-right">
       <span id="root-name"></span>
+      <button id="view-hyper-btn" class="view-btn active" title="Hyperbolische Ansicht">Hyper</button>
+      <button id="view-timeline-btn" class="view-btn" title="Zeitleisten-Ansicht">Zeitlinie</button>
       <button id="load-btn" class="toggle-btn" title="GEDCOM laden">Laden</button>
       <button id="save-btn" class="toggle-btn" title="GEDCOM speichern">Speichern</button>
       <button id="siblings-btn" class="toggle-btn" title="Geschwister ein/aus">Geschwister</button>
@@ -26,7 +28,16 @@
   </div>
 
   <div id="canvas-container">
+    <!-- Hyperbolic view -->
     <svg id="hyperbolic-svg"></svg>
+
+    <!-- Timeline view (hidden by default) -->
+    <div id="timeline-view" style="display: none;">
+      <div class="timeline-inner">
+        <!-- Timeline content will be rendered here -->
+      </div>
+    </div>
+
     <div id="center-info"></div>
     <div id="tooltip"></div>
     <div id="map-container"></div>

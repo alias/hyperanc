@@ -68,6 +68,41 @@ class App {
 
     // Drag&drop on canvas
     setupDragDrop(container, (data) => this.loadData(data));
+
+    // View switching
+    this.currentView = 'hyper';
+    this._setupViewSwitching();
+  }
+
+  _setupViewSwitching() {
+    const hyperBtn = document.getElementById('view-hyper-btn');
+    const timelineBtn = document.getElementById('view-timeline-btn');
+    const hyperSvg = document.getElementById('hyperbolic-svg');
+    const timelineView = document.getElementById('timeline-view');
+
+    hyperBtn.addEventListener('click', () => {
+      if (this.currentView === 'hyper') return;
+      this.currentView = 'hyper';
+      hyperBtn.classList.add('active');
+      timelineBtn.classList.remove('active');
+      hyperSvg.style.display = 'block';
+      timelineView.style.display = 'none';
+      this.render();
+    });
+
+    timelineBtn.addEventListener('click', () => {
+      if (this.currentView === 'timeline') return;
+      this.currentView = 'timeline';
+      timelineBtn.classList.add('active');
+      hyperBtn.classList.remove('active');
+      hyperSvg.style.display = 'none';
+      timelineView.style.display = 'block';
+      this.renderTimeline();
+    });
+  }
+
+  renderTimeline() {
+    // Placeholder - timeline rendering will be implemented later
   }
 
   /**
