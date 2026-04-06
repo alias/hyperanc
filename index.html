@@ -22,6 +22,7 @@
       <button id="nav-fwd-btn" class="nav-btn" title="Vorwärts (Alt+Rechts)">&rarr;</button>
       <button id="view-hyper-btn" class="view-btn active" title="Hyperbolische Ansicht">Hyper</button>
       <button id="view-timeline-btn" class="view-btn" title="Zeitleisten-Ansicht">Zeitlinie</button>
+      <button id="view-baum-btn" class="view-btn" title="Ahnenbaum">Baum</button>
       <button id="load-btn" class="toggle-btn" title="GEDCOM laden">Laden</button>
       <button id="save-btn" class="toggle-btn" title="GEDCOM speichern">Speichern</button>
       <button id="siblings-btn" class="toggle-btn" title="Geschwister ein/aus">Geschwister</button>
@@ -35,9 +36,12 @@
 
     <!-- Timeline view (hidden by default) -->
     <div id="timeline-view" style="display: none;">
-      <div class="timeline-inner">
-        <!-- Timeline content will be rendered here -->
-      </div>
+      <div class="timeline-inner"></div>
+    </div>
+
+    <!-- Tree/Pedigree view (hidden by default) -->
+    <div id="tree-view" style="display: none;">
+      <div class="tree-inner"></div>
     </div>
 
     <div id="center-info"></div>

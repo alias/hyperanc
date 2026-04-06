@@ -12,6 +12,7 @@ import { UI } from './ui.js';
 import { cAbs } from './hyperbolic-math.js';
 import { loadFromFile, loadFromUrl, saveToFile, setupDragDrop } from './file-io.js';
 import { TimelineView } from './timeline-view.js';
+import { TreeView } from './tree-view.js';
 
 class App {
   constructor() {
@@ -74,8 +75,9 @@ class App {
     // Drag&drop on canvas
     setupDragDrop(container, (data, file) => this.loadData(data, file?.name));
 
-    // Timeline view
+    // Additional views
     this.timelineView = new TimelineView(document.getElementById('timeline-view'), this);
+    this.treeView = new TreeView(document.getElementById('tree-view'), this);
 
     // View switching
     this.currentView = 'hyper';
@@ -86,30 +88,32 @@ class App {
   }
 
   _setupViewSwitching() {
-    const hyperBtn = document.getElementById('view-hyper-btn');
-    const timelineBtn = document.getElementById('view-timeline-btn');
-    const hyperSvg = document.getElementById('hyperbolic-svg');
-    const timelineView = document.getElementById('timeline-view');
+    const btns = {
+      hyper: document.getElementById('view-hyper-btn'),
+      timeline: document.getElementById('view-timeline-btn'),
+      baum: document.getElementById('view-baum-btn')
+    };
+    const views = {
+      hyper: document.getElementById('hyperbolic-svg'),
+      timeline: document.getElementById('timeline-view'),
+      baum: document.getElementById('tree-view')
+    };
 
-    hyperBtn.addEventListener('click', () => {
-      if (this.currentView === 'hyper') return;
-      this.currentView = 'hyper';
-      hyperBtn.classList.add('active');
-      timelineBtn.classList.remove('active');
-      hyperSvg.style.display = 'block';
-      timelineView.style.display = 'none';
+    const switchTo = (viewName) => {
+      if (this.currentView === viewName) return;
+      this.currentView = viewName;
+      for (const [name, btn] of Object.entries(btns)) {
+        btn.classList.toggle('active', name === viewName);
+      }
+      for (const [name, el] of Object.entries(views)) {
+        el.style.display = name === viewName ? (name === 'hyper' ? 'block' : 'block') : 'none';
+      }
       this.render();
-    });
+    };
 
-    timelineBtn.addEventListener('click', () => {
-      if (this.currentView === 'timeline') return;
-      this.currentView = 'timeline';
-      timelineBtn.classList.add('active');
-      hyperBtn.classList.remove('active');
-      hyperSvg.style.display = 'none';
-      timelineView.style.display = 'block';
-      this.renderTimeline();
-    });
+    btns.hyper.addEventListener('click', () => switchTo('hyper'));
+    btns.timeline.addEventListener('click', () => switchTo('timeline'));
+    btns.baum.addEventListener('click', () => switchTo('baum'));
   }
 
   _setupHistory() {
@@ -176,6 +180,12 @@ class App {
   renderTimeline() {
     if (this.timelineView && this.data) {
       this.timelineView.render();
+    }
+  }
+
+  renderTree() {
+    if (this.treeView && this.data) {
+      this.treeView.render();
     }
   }
 
@@ -417,6 +427,11 @@ class App {
 
     if (this.currentView === 'timeline') {
       this.renderTimeline();
+      return;
+    }
+
+    if (this.currentView === 'baum') {
+      this.renderTree();
       return;
     }
 
