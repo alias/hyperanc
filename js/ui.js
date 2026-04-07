@@ -390,6 +390,11 @@ export class UI {
       }
     }
 
+    // Placeholder for crosshair age (only in right tooltip panel)
+    if (showRelation) {
+      html += `<div id="tl-crosshair-age" class="tooltip-crosshair-age" style="display:none"></div>`;
+    }
+
     // Family links (parents, siblings)
     if (data) {
       const familyHtml = this._buildFamilyLinks(indi, data);

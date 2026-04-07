@@ -98,24 +98,63 @@ export class TimelineView {
       }
     }
 
+    // Collect partners and children of the root person
+    const partnerRows = [];
+    const childRows = [];
+    const addedIds = new Set(rows.map(r => r.id));
+    siblingRows.forEach(s => addedIds.add(s.id));
+
+    for (const famId of rootIndi.familiesAsSpouse || []) {
+      const fam = families.get(famId);
+      if (!fam) continue;
+      // Partner
+      const spouseId = fam.husbandId === rootId ? fam.wifeId : fam.husbandId;
+      if (spouseId && !addedIds.has(spouseId)) {
+        const spouse = individuals.get(spouseId);
+        if (spouse) {
+          const range = getLifeRange(spouse);
+          if (range) {
+            addedIds.add(spouseId);
+            partnerRows.push({ id: spouseId, individual: spouse, isSibling: false, isPartner: true,
+              node: { id: spouseId, individual: spouse, direction: 'partner', generation: 0, ahnentafelNumber: null }, ...range });
+          }
+        }
+      }
+      // Children
+      for (const cid of fam.childIds) {
+        if (addedIds.has(cid)) continue;
+        const child = individuals.get(cid);
+        if (!child) continue;
+        const range = getLifeRange(child);
+        if (range) {
+          addedIds.add(cid);
+          childRows.push({ id: cid, individual: child, isSibling: false, isPartner: false, isChild: true,
+            node: { id: cid, individual: child, direction: 'descendant', generation: -1, ahnentafelNumber: null }, ...range });
+        }
+      }
+    }
+
     // Determine time range
     let minYear = Infinity, maxYear = -Infinity;
-    for (const r of rows) {
+    for (const r of [...rows, ...siblingRows, ...partnerRows, ...childRows]) {
       if (r.startYear < minYear) minYear = r.startYear;
       if (r.endYear > maxYear) maxYear = r.endYear;
-    }
-    for (const s of siblingRows) {
-      if (s.startYear < minYear) minYear = s.startYear;
-      if (s.endYear > maxYear) maxYear = s.endYear;
     }
     minYear = Math.floor(minYear / 25) * 25 - 25;
     maxYear = Math.ceil(maxYear / 25) * 25 + 25;
 
-    // Insert sibling rows directly after the root person
+    // Build final row order:
+    // Father branch ... | children | partners | ROOT | siblings | Mother branch ...
     const rootRowIdx = rows.findIndex(r => r.id === rootId);
     const allRows = [...rows];
-    if (rootRowIdx >= 0 && siblingRows.length > 0) {
-      allRows.splice(rootRowIdx + 1, 0, ...siblingRows);
+    // Insert children + partners BEFORE root
+    if (rootRowIdx >= 0) {
+      allRows.splice(rootRowIdx, 0, ...childRows, ...partnerRows);
+    }
+    // Insert siblings AFTER root (now shifted by inserted rows)
+    const newRootIdx = allRows.findIndex(r => r.id === rootId);
+    if (newRootIdx >= 0 && siblingRows.length > 0) {
+      allRows.splice(newRootIdx + 1, 0, ...siblingRows);
     }
 
     // Layout
@@ -169,19 +208,50 @@ export class TimelineView {
     const axisCrosshair = axisSvg.append('line').attr('y1', 0).attr('y2', marginTop).attr('stroke', '#e8b84b').attr('stroke-width', 1).attr('stroke-opacity', 0).attr('pointer-events', 'none');
     const crosshairLabel = axisSvg.append('text').attr('y', axisY - 18).attr('text-anchor', 'middle').attr('fill', '#e8b84b').attr('font-size', '10px').attr('font-weight', '600').attr('opacity', 0);
 
+    // Store row layout info for age-at-crosshair calculation
+    this._rowLayout = [];
+
     this.inner.onmousemove = (e) => {
       const r = this.inner.getBoundingClientRect();
       const mx = e.clientX - r.left;
+      const my = e.clientY - r.top - marginTop + this.inner.scrollTop;
+
       if (mx >= marginLeft && mx <= width - marginRight) {
         crosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
         axisCrosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
-        crosshairLabel.attr('x', mx).text(Math.round(xToYear(mx))).attr('opacity', 1);
+        const cursorYear = xToYear(mx);
+        const roundedYear = Math.round(cursorYear);
+        crosshairLabel.attr('x', mx).text(roundedYear).attr('opacity', 1);
+
+        // Update age in right info panel if mouse is over a person's bar
+        const ageEl = document.getElementById('tl-crosshair-age');
+        let found = false;
+        for (const rl of this._rowLayout) {
+          if (my >= rl.y && my <= rl.y + BAR_H && mx >= rl.x1 && mx <= rl.x2 && rl.birthYear) {
+            const ageAtCursor = Math.floor(cursorYear - rl.birthYear);
+            if (ageAtCursor >= 0 && ageAtCursor <= 120) {
+              if (ageEl) {
+                ageEl.textContent = `${roundedYear}: ${ageAtCursor} Jahre`;
+                ageEl.style.display = 'block';
+              }
+              found = true;
+            }
+            break;
+          }
+        }
+        if (!found && ageEl) ageEl.style.display = 'none';
       } else {
-        crosshair.attr('stroke-opacity', 0); axisCrosshair.attr('stroke-opacity', 0); crosshairLabel.attr('opacity', 0);
+        crosshair.attr('stroke-opacity', 0); axisCrosshair.attr('stroke-opacity', 0);
+        crosshairLabel.attr('opacity', 0);
+        const ageEl = document.getElementById('tl-crosshair-age');
+        if (ageEl) ageEl.style.display = 'none';
       }
     };
     this.inner.onmouseleave = () => {
-      crosshair.attr('stroke-opacity', 0); axisCrosshair.attr('stroke-opacity', 0); crosshairLabel.attr('opacity', 0);
+      crosshair.attr('stroke-opacity', 0); axisCrosshair.attr('stroke-opacity', 0);
+      crosshairLabel.attr('opacity', 0);
+      const ageEl = document.getElementById('tl-crosshair-age');
+      if (ageEl) ageEl.style.display = 'none';
     };
 
     // --- Render bars ---
@@ -207,6 +277,7 @@ export class TimelineView {
       if (totalW < 2) return;
 
       personYMap.set(p.id, { y, x1, x2, midY: y + BAR_H / 2 });
+      this._rowLayout.push({ y, x1, x2, birthYear: extractYear(p.individual.birthDate), id: p.id });
 
       const g = barsGroup.append('g')
         .style('cursor', 'pointer')
@@ -221,7 +292,7 @@ export class TimelineView {
       // Gradient
       const gradId = `tl-bar-${i}`;
       const grad = defs.append('linearGradient').attr('id', gradId).attr('x1', '0%').attr('x2', '100%');
-      const opacity = isCenter ? 0.9 : p.isSibling ? 0.3 : p.isPartner ? 0.35 : 0.65;
+      const opacity = isCenter ? 0.9 : (p.isSibling || p.isPartner) ? 0.3 : p.isChild ? 0.55 : 0.65;
 
       if (!p.startKnown) {
         grad.append('stop').attr('offset', '0%').attr('stop-color', baseColor).attr('stop-opacity', 0);
