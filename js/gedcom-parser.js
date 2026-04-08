@@ -257,6 +257,83 @@ export function getAge(individual) {
   return age;
 }
 
+/**
+ * Extract a year from a GEDCOM date string.
+ */
+export function extractYear(dateStr) {
+  if (!dateStr) return null;
+  const m = dateStr.match(/(\d{4})/);
+  return m ? parseInt(m[1]) : null;
+}
+
+/**
+ * Estimate birth year for a person using family context.
+ * Tries: birthDate, deathDate - 50, children's birth - 25, parents' birth + 25.
+ * Returns { year, known } or null.
+ */
+export function estimateBirthYear(individual, families, individuals) {
+  const b = extractYear(individual.birthDate);
+  if (b) return { year: b, known: true };
+
+  const d = extractYear(individual.deathDate);
+  if (d) return { year: d - 50, known: false };
+
+  // Try children: birth ~25 years before oldest child
+  if (families && individuals) {
+    for (const famId of individual.familiesAsSpouse || []) {
+      const fam = families.get(famId);
+      if (!fam) continue;
+      for (const cid of fam.childIds) {
+        const child = individuals.get(cid);
+        if (!child) continue;
+        const cy = extractYear(child.birthDate);
+        if (cy) return { year: cy - 25, known: false };
+      }
+    }
+
+    // Try parents: born ~25 years after parent
+    if (individual.familyAsChild) {
+      const fam = families.get(individual.familyAsChild);
+      if (fam) {
+        for (const pid of [fam.husbandId, fam.wifeId]) {
+          if (!pid) continue;
+          const parent = individuals.get(pid);
+          if (!parent) continue;
+          const py = extractYear(parent.birthDate);
+          if (py) return { year: py + 25, known: false };
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Get estimated life range for display (timeline, tree).
+ * Returns { startYear, endYear, startKnown, endKnown } or null.
+ */
+export function getLifeRange(individual, families, individuals) {
+  const birthEst = estimateBirthYear(individual, families, individuals);
+  const deathYear = extractYear(individual.deathDate);
+
+  let startYear = birthEst ? birthEst.year : null;
+  let endYear = deathYear;
+  let startKnown = birthEst ? birthEst.known : false;
+  let endKnown = !!deathYear;
+
+  if (!startYear && !endYear) return null;
+
+  if (!startYear && endYear) { startYear = endYear - 50; startKnown = false; }
+  if (!endYear && startYear) {
+    const now = new Date().getFullYear();
+    endYear = (now - startYear) < 120 ? now : startYear + 50;
+    endKnown = false;
+  }
+
+  return { startYear, endYear, startKnown, endKnown };
+}
+
 export function getDisplayName(individual) {
   const given = individual.givenName || '';
   const sur = individual.surname || '';

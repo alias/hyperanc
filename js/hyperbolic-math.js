@@ -131,6 +131,69 @@ export function geodesicPath(z1, z2, centerX, centerY, radius) {
 }
 
 /**
+ * Compute a point on the geodesic arc between z1 and z2 at fraction t (0-1).
+ * Returns screen coordinates [sx, sy] and tangent direction [tx, ty].
+ */
+export function geodesicPointAt(z1, z2, t, centerX, centerY, radius) {
+  const [sx1, sy1] = diskToScreen(z1, centerX, centerY, radius);
+  const [sx2, sy2] = diskToScreen(z2, centerX, centerY, radius);
+
+  const cross = z1[0] * z2[1] - z1[1] * z2[0];
+  const abs1sq = z1[0] * z1[0] + z1[1] * z1[1];
+  const abs2sq = z2[0] * z2[0] + z2[1] * z2[1];
+
+  // Straight line cases
+  if (Math.abs(cross) < 0.001 || abs1sq < 1e-10 || abs2sq < 1e-10) {
+    const px = sx1 + (sx2 - sx1) * t;
+    const py = sy1 + (sy2 - sy1) * t;
+    const dx = sx2 - sx1;
+    const dy = sy2 - sy1;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: px, y: py, tx: dx / len, ty: dy / len };
+  }
+
+  // Find arc circle center (same math as geodesicPath)
+  const inv1 = [z1[0] / abs1sq, z1[1] / abs1sq];
+  const ax = z1[0], ay = z1[1];
+  const bx = z2[0], by = z2[1];
+  const cx = inv1[0], cy = inv1[1];
+  const D = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+
+  if (Math.abs(D) < 1e-10) {
+    const px = sx1 + (sx2 - sx1) * t;
+    const py = sy1 + (sy2 - sy1) * t;
+    return { x: px, y: py, tx: sx2 - sx1, ty: sy2 - sy1 };
+  }
+
+  const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / D;
+  const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / D;
+  const arcR = Math.sqrt((ax - ux) * (ax - ux) + (ay - uy) * (ay - uy));
+
+  // Convert to screen
+  const [scx, scy] = diskToScreen([ux, uy], centerX, centerY, radius);
+  const sArcR = arcR * radius;
+
+  // Angles of endpoints on the arc circle
+  const a1 = Math.atan2(sy1 - scy, sx1 - scx);
+  const a2 = Math.atan2(sy2 - scy, sx2 - scx);
+
+  // Choose shortest arc
+  let da = a2 - a1;
+  if (da > Math.PI) da -= 2 * Math.PI;
+  if (da < -Math.PI) da += 2 * Math.PI;
+
+  const angle = a1 + da * t;
+  const px = scx + sArcR * Math.cos(angle);
+  const py = scy + sArcR * Math.sin(angle);
+
+  // Tangent is perpendicular to radius at this point
+  const tx = -Math.sin(angle) * Math.sign(da);
+  const ty = Math.cos(angle) * Math.sign(da);
+
+  return { x: px, y: py, tx, ty };
+}
+
+/**
  * Interpolate Möbius transform parameter for animation.
  * Linearly interpolate in disk coordinates (good enough for smooth animation).
  */

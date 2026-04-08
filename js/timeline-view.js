@@ -4,32 +4,7 @@
  * Father line above, Mother line below.
  * Time axis horizontal (left=past, right=present).
  */
-import { getDisplayName, formatDate } from './gedcom-parser.js';
-
-function extractYear(dateStr) {
-  if (!dateStr) return null;
-  const m = dateStr.match(/(\d{4})/);
-  return m ? parseInt(m[1]) : null;
-}
-
-function getLifeRange(indi) {
-  const birthYear = extractYear(indi.birthDate);
-  const deathYear = extractYear(indi.deathDate);
-  let startYear = birthYear;
-  let endYear = deathYear;
-  let startKnown = !!birthYear;
-  let endKnown = !!deathYear;
-
-  if (!startYear && !endYear) return null;
-
-  if (!startYear && endYear) { startYear = endYear - 50; startKnown = false; }
-  if (!endYear && startYear) {
-    const now = new Date().getFullYear();
-    endYear = (now - startYear) < 120 ? now : startYear + 50;
-    endKnown = false;
-  }
-  return { startYear, endYear, startKnown, endKnown };
-}
+import { getDisplayName, formatDate, getLifeRange, extractYear } from './gedcom-parser.js';
 
 const BAR_H = 14;
 const ROW_GAP = 3;
@@ -70,7 +45,7 @@ export class TimelineView {
         for (const sibId of sibs) {
           const sib = individuals.get(sibId);
           if (!sib) continue;
-          const range = getLifeRange(sib);
+          const range = getLifeRange(sib, families, individuals);
           if (!range) continue;
           siblingRows.push({ id: sibId, individual: sib, isSibling: true, isPartner: false, ...range });
         }
@@ -87,7 +62,7 @@ export class TimelineView {
               if (!fullSet.has(hid) && hid !== rootId) {
                 const h = individuals.get(hid);
                 if (!h) continue;
-                const range = getLifeRange(h);
+                const range = getLifeRange(h, families, individuals);
                 if (range && !siblingRows.find(s => s.id === hid)) {
                   siblingRows.push({ id: hid, individual: h, isSibling: true, isHalf: true, isPartner: false, ...range });
                 }
@@ -112,7 +87,7 @@ export class TimelineView {
       if (spouseId && !addedIds.has(spouseId)) {
         const spouse = individuals.get(spouseId);
         if (spouse) {
-          const range = getLifeRange(spouse);
+          const range = getLifeRange(spouse, families, individuals);
           if (range) {
             addedIds.add(spouseId);
             partnerRows.push({ id: spouseId, individual: spouse, isSibling: false, isPartner: true,
@@ -125,7 +100,7 @@ export class TimelineView {
         if (addedIds.has(cid)) continue;
         const child = individuals.get(cid);
         if (!child) continue;
-        const range = getLifeRange(child);
+        const range = getLifeRange(child, families, individuals);
         if (range) {
           addedIds.add(cid);
           childRows.push({ id: cid, individual: child, isSibling: false, isPartner: false, isChild: true,
@@ -211,17 +186,41 @@ export class TimelineView {
     // Store row layout info for age-at-crosshair calculation
     this._rowLayout = [];
 
+    // Mouse position helper: use offsetX/offsetY which are relative to the target
+    // element and already account for CSS transforms in all browsers
+    const svgNode = svg.node();
+    const axisNode = axisSvg.node();
+
+    const getMouseInSvg = (e) => {
+      // offsetX/Y are relative to the event target, but we need relative to the SVG
+      // Use the SVG's bounding rect divided by its CSS size to get the scale factor
+      const svgRect = svgNode.getBoundingClientRect();
+      const svgW = parseFloat(svgNode.getAttribute('width'));
+      const svgH = parseFloat(svgNode.getAttribute('height'));
+      const scaleX = svgW / svgRect.width;
+      const scaleY = svgH / svgRect.height;
+      const mx = (e.clientX - svgRect.left) * scaleX;
+      const my = (e.clientY - svgRect.top) * scaleY;
+      return { mx, my };
+    };
+
+    const getMouseInAxis = (e) => {
+      const axisRect = axisNode.getBoundingClientRect();
+      const axisW = parseFloat(axisNode.getAttribute('width'));
+      const scaleX = axisW / axisRect.width;
+      return (e.clientX - axisRect.left) * scaleX;
+    };
+
     this.inner.onmousemove = (e) => {
-      const r = this.inner.getBoundingClientRect();
-      const mx = e.clientX - r.left;
-      const my = e.clientY - r.top - marginTop + this.inner.scrollTop;
+      const { mx, my } = getMouseInSvg(e);
+      const axisX = getMouseInAxis(e);
 
       if (mx >= marginLeft && mx <= width - marginRight) {
         crosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
-        axisCrosshair.attr('x1', mx).attr('x2', mx).attr('stroke-opacity', 0.6);
+        axisCrosshair.attr('x1', axisX).attr('x2', axisX).attr('stroke-opacity', 0.6);
         const cursorYear = xToYear(mx);
         const roundedYear = Math.round(cursorYear);
-        crosshairLabel.attr('x', mx).text(roundedYear).attr('opacity', 1);
+        crosshairLabel.attr('x', axisX).text(roundedYear).attr('opacity', 1);
 
         // Update age in right info panel if mouse is over a person's bar
         const ageEl = document.getElementById('tl-crosshair-age');
@@ -283,7 +282,9 @@ export class TimelineView {
         .style('cursor', 'pointer')
         .on('click', () => this.app.selectPerson(p.id))
         .on('mouseenter', () => {
-          this.app.ui.showTooltip(p.node || { id: p.id, individual: p.individual, direction: p.isSibling ? 'sibling' : 'ancestor', generation: p.generation || 0, ahnentafelNumber: null }, {});
+          // Find the real node from flatTree for correct relationship display
+          const realNode = this._findTreeNode(p.id) || p.node || { id: p.id, individual: p.individual, direction: p.isSibling ? 'sibling' : p.isPartner ? 'partner' : p.isChild ? 'descendant' : 'ancestor', generation: p.generation || 0, ahnentafelNumber: null };
+          this.app.ui.showTooltip(realNode, {});
           marriageOverlay.selectAll('*').remove();
           this._showMarriageLine(p, personYMap, yearToX, marriageOverlay);
         })
@@ -363,7 +364,7 @@ export class TimelineView {
     this._assignRows(node.father, rows, individuals, families);
 
     // This person
-    const range = getLifeRange(node.individual);
+    const range = getLifeRange(node.individual, families, individuals);
     const generation = node.depth;
     rows.push({
       id: node.id,
@@ -377,6 +378,17 @@ export class TimelineView {
 
     // Mother branch after (below)
     this._assignRows(node.mother, rows, individuals, families);
+  }
+
+  /**
+   * Find the real tree node from flatTree (with correct ahnentafelNumber, direction, etc.)
+   */
+  _findTreeNode(personId) {
+    const ft = this.app.flatTree;
+    if (!ft) return null;
+    return ft.nodes.find(n => n.id === personId)
+      || ft.siblingNodes.find(n => n.id === personId)
+      || null;
   }
 
   _showMarriageLine(person, personYMap, yearToX, overlay) {

@@ -3,7 +3,7 @@
  * D3/SVG rendering of the hyperbolic tree in the Poincaré disk.
  * Supports tree edges (solid) and sibling edges (dashed).
  */
-import { diskToScreen, geodesicPath, cAbs } from './hyperbolic-math.js';
+import { diskToScreen, geodesicPath, geodesicPointAt, cAbs } from './hyperbolic-math.js';
 import { getDisplayName, getLifespan, formatDate } from './gedcom-parser.js';
 
 export class Renderer {
@@ -154,55 +154,35 @@ export class Renderer {
 
     // --- Parent->Child Arrows on ALL tree edges ---
     // Uses getPointAtLength on the actual SVG path to sit on the curved geodesic
-    const edgePathEls = this.edgesGroup.selectAll('.edge').nodes();
-    const edgePathMap = new Map();
-    edgePathEls.forEach(el => {
-      const d = d3.select(el).datum();
-      if (d) edgePathMap.set(`${d.source.id}-${d.target.id}`, el);
-    });
-
+    // --- Parent->Child Arrows on geodesic arcs (zoom-safe, no getPointAtLength) ---
     const arrows = this.edgesGroup.selectAll('.desc-arrow')
       .data(treeEdgeData, d => `arr-${d.source.id}-${d.target.id}`);
     arrows.exit().remove();
     const arrowEnter = arrows.enter().append('polygon').attr('class', 'desc-arrow');
     arrows.merge(arrowEnter)
       .attr('points', d => {
-        const pathEl = edgePathMap.get(`${d.source.id}-${d.target.id}`);
-        if (!pathEl) return '';
-        const totalLen = pathEl.getTotalLength();
-        if (totalLen < 2) return '';
+        const dp1 = diskPositions.get(d.source.id);
+        const dp2 = diskPositions.get(d.target.id);
+        if (!dp1 || !dp2) return '';
 
-        // Arrow points from parent to child
         const isAncestor = d.target.direction === 'ancestor' && d.target.generation > d.source.generation;
+        // Arrow from parent to child: for ancestor edges source=child, target=parent
+        const parentDisk = isAncestor ? dp2 : dp1;
+        const childDisk = isAncestor ? dp1 : dp2;
 
-        // For ancestor edges the path goes source(child)->target(parent),
-        // so arrow at 45% points toward source (child). For descendant: 55%.
-        const pathFraction = isAncestor ? 0.45 : 0.55;
-        const sampleDelta = 2; // px for tangent approximation
+        // Get point at 55% along the geodesic from parent to child
+        const pt = geodesicPointAt(parentDisk, childDisk, 0.55, cx, cy, radius);
+        if (!pt) return '';
 
-        const lenAt = totalLen * pathFraction;
-        const pt = pathEl.getPointAtLength(lenAt);
-
-        // Get tangent by sampling nearby points
-        const ptBefore = pathEl.getPointAtLength(Math.max(0, lenAt - sampleDelta));
-        const ptAfter = pathEl.getPointAtLength(Math.min(totalLen, lenAt + sampleDelta));
-
-        // Tangent direction along the path
-        let tdx = ptAfter.x - ptBefore.x;
-        let tdy = ptAfter.y - ptBefore.y;
+        let tdx = pt.tx, tdy = pt.ty;
         const tlen = Math.sqrt(tdx * tdx + tdy * tdy);
-        if (tlen < 0.1) return '';
+        if (tlen < 0.01) return '';
         tdx /= tlen;
         tdy /= tlen;
 
-        // For ancestor edges, reverse direction so arrow points toward child (source)
-        if (isAncestor) { tdx = -tdx; tdy = -tdy; }
-
-        // Perpendicular
         const px = -tdy;
         const py = tdx;
 
-        // Size based on conformal factor at the child end
         const childId = isAncestor ? d.source.id : d.target.id;
         const midDisk = diskPositions.get(childId);
         const r = midDisk ? cAbs(midDisk) : 0.5;
