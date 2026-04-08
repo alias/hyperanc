@@ -207,7 +207,9 @@ body {
   width: 100%;
   height: calc(100vh - 50px);
   position: relative;
+  --ui-scale: 1;
 }
+
 
 #hyperbolic-svg {
   width: 100%;

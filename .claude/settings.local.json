@@ -3,7 +3,10 @@
     "allow": [
       "mcp__Claude_Preview__preview_start",
       "WebSearch",
-      "WebFetch(domain:gedcom.io)"
+      "WebFetch(domain:gedcom.io)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :8080)",
+      "Bash(taskkill /PID 42228 /F)"
     ]
   }
 }

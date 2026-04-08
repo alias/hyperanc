@@ -79,12 +79,38 @@ class App {
     this.timelineView = new TimelineView(document.getElementById('timeline-view'), this);
     this.treeView = new TreeView(document.getElementById('tree-view'), this);
 
+    // Ctrl+Wheel zoom (UI scale)
+    this._uiScale = 1.0;
+    this._setupUiZoom(container);
+
     // View switching
     this.currentView = 'hyper';
     this._setupViewSwitching();
 
     // Browser history (back/forward)
     this._setupHistory();
+  }
+
+  _setupUiZoom(container) {
+    const applyScale = () => {
+      container.style.zoom = this._uiScale;
+    };
+
+    window.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      this._uiScale = Math.max(0.4, Math.min(2.5, this._uiScale + delta));
+      applyScale();
+    }, { passive: false });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === '0') {
+        e.preventDefault();
+        this._uiScale = 1.0;
+        container.style.zoom = '';
+      }
+    });
   }
 
   _setupViewSwitching() {

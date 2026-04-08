@@ -332,6 +332,9 @@ export class TimelineView {
         g.append('text').attr('x', x2 + 4).attr('y', y + BAR_H - 2).attr('text-anchor', 'start').attr('fill', nameColor).attr('font-size', '9px').text(name);
       }
     });
+
+    // Enable drag-to-pan
+    this._setupDragPan();
   }
 
   /**
@@ -411,5 +414,38 @@ export class TimelineView {
 
     overlay.append('circle').attr('cx', lineX).attr('cy', y1).attr('r', 3).attr('fill', '#e8b84b');
     overlay.append('circle').attr('cx', lineX).attr('cy', y2).attr('r', 3).attr('fill', '#e8b84b');
+  }
+
+  _setupDragPan() {
+    const el = this.inner;
+    let dragging = false;
+    let startX, startY, scrollLeft, scrollTop;
+
+    el.onmousedown = (e) => {
+      if (e.target.closest('g[style*="cursor"]')) return; // don't interfere with bar clicks
+      dragging = true;
+      el.style.cursor = 'grabbing';
+      startX = e.clientX;
+      startY = e.clientY;
+      scrollLeft = el.scrollLeft;
+      scrollTop = el.scrollTop;
+      e.preventDefault();
+    };
+
+    const origMove = el.onmousemove; // preserve crosshair handler
+    el.onmousemove = (e) => {
+      if (origMove) origMove(e);
+      if (!dragging) return;
+      el.scrollLeft = scrollLeft - (e.clientX - startX);
+      el.scrollTop = scrollTop - (e.clientY - startY);
+    };
+
+    el.onmouseup = () => { dragging = false; el.style.cursor = 'default'; };
+    const origLeave = el.onmouseleave;
+    el.onmouseleave = (e) => {
+      if (origLeave) origLeave(e);
+      dragging = false;
+      el.style.cursor = 'default';
+    };
   }
 }

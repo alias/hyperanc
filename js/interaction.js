@@ -216,6 +216,7 @@ export class Interaction {
 
   _setupZoom() {
     d3.select(this.svg).on('wheel', (event) => {
+      if (event.ctrlKey) return; // Let Ctrl+Wheel pass through for UI zoom
       event.preventDefault();
       const delta = event.deltaY > 0 ? 0.05 : -0.05;
       this.app.adjustStep(delta);
