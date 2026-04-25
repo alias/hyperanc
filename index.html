@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hyperbolische Ahnentafel</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <title>Roots - Ancestry Viewer</title>
   <link rel="stylesheet" href="css/styles.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9/dist/leaflet.min.css">
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
@@ -11,7 +12,7 @@
 </head>
 <body>
   <div class="header">
-    <h1>Hyperbolische Ahnentafel</h1>
+    <h1><svg class="app-icon" viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="6" r="2.5" fill="#d4a017"/><line x1="12" y1="8.5" x2="12" y2="14" stroke="#d4a017" stroke-width="1.5"/><line x1="12" y1="14" x2="7" y2="20" stroke="#4da8da" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="14" x2="17" y2="20" stroke="#e94560" stroke-width="1.5" stroke-linecap="round"/><circle cx="7" cy="20" r="1.5" fill="#4da8da"/><circle cx="17" cy="20" r="1.5" fill="#e94560"/><line x1="7" y1="20" x2="4" y2="24" stroke="#4da8da" stroke-width="1" opacity="0.5" stroke-linecap="round"/><line x1="7" y1="20" x2="9" y2="24" stroke="#4da8da" stroke-width="1" opacity="0.5" stroke-linecap="round"/><line x1="17" y1="20" x2="15" y2="24" stroke="#e94560" stroke-width="1" opacity="0.5" stroke-linecap="round"/><line x1="17" y1="20" x2="19.5" y2="24" stroke="#e94560" stroke-width="1" opacity="0.5" stroke-linecap="round"/></svg> Roots</h1>
     <div class="search-container">
       <input type="text" id="search-input" placeholder="Person suchen..." autocomplete="off">
       <div id="search-results"></div>
@@ -103,6 +104,61 @@
       <div class="dialog-footer">
         <button id="save-download-btn" class="btn-primary">Herunterladen</button>
         <button id="save-close-btn" class="btn-secondary">Abbrechen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Person Dialog -->
+  <div id="edit-overlay" class="overlay" style="display: none;">
+    <div class="dialog edit-dialog">
+      <h2>Person bearbeiten</h2>
+      <input type="hidden" id="edit-person-id">
+      <div class="edit-grid">
+        <div class="edit-row">
+          <label>Vorname(n):</label>
+          <input type="text" id="edit-given" placeholder="Vorname">
+        </div>
+        <div class="edit-row">
+          <label>Nachname:</label>
+          <input type="text" id="edit-surname" placeholder="Nachname">
+        </div>
+        <div class="edit-row">
+          <label>Geschlecht:</label>
+          <select id="edit-sex">
+            <option value="">-</option>
+            <option value="M">Männlich</option>
+            <option value="F">Weiblich</option>
+          </select>
+        </div>
+        <div class="edit-row">
+          <label>Geburtsdatum:</label>
+          <input type="text" id="edit-birth-date" placeholder="TT.MM.JJJJ">
+        </div>
+        <div class="edit-row">
+          <label>Geburtsort:</label>
+          <input type="text" id="edit-birth-place" placeholder="Ort">
+        </div>
+      </div>
+      <details class="edit-details">
+        <summary>Weitere Daten</summary>
+        <div class="edit-grid">
+          <div class="edit-row">
+            <label>Sterbedatum:</label>
+            <input type="text" id="edit-death-date" placeholder="TT.MM.JJJJ">
+          </div>
+          <div class="edit-row">
+            <label>Sterbeort:</label>
+            <input type="text" id="edit-death-place" placeholder="Ort">
+          </div>
+          <div class="edit-row">
+            <label>Beruf:</label>
+            <input type="text" id="edit-occupation" placeholder="Beruf">
+          </div>
+        </div>
+      </details>
+      <div class="dialog-footer">
+        <button id="edit-save-btn" class="btn-primary">Speichern</button>
+        <button id="edit-cancel-btn" class="btn-secondary">Abbrechen</button>
       </div>
     </div>
   </div>

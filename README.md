@@ -1,4 +1,4 @@
-# HyperAnc - Hyperbolic Ancestry Viewer
+# Roots - Ancestry Viewer
 
 An interactive genealogy visualization tool offering three distinct views of family trees: a hyperbolic (Poincare disk) projection, a horizontal pedigree timeline, and a classical ancestor tree. Built as a pure frontend application with no server-side dependencies or build step.
 

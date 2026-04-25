@@ -3,6 +3,79 @@
  * Search, center info panel, hover tooltip, map view.
  */
 import { getDisplayName, getLifespan, getAge, formatDate } from './gedcom-parser.js';
+
+// --- Date conversion helpers (German display ↔ GEDCOM internal) ---
+const MON_TO_NUM = { JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06',
+  JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12' };
+const NUM_TO_MON = ['', 'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+
+/** Convert GEDCOM date to German input format. "2 JUL 1934" → "02.07.1934" */
+function gedcomToInput(gedDate) {
+  if (!gedDate) return '';
+  let d = gedDate.trim();
+  // Strip prefixes
+  let prefix = '';
+  for (const p of ['ABT ', 'BEF ', 'AFT ', 'EST ', 'CAL ']) {
+    if (d.startsWith(p)) { prefix = p.trim() + ' '; d = d.substring(p.length); break; }
+  }
+  // Full: "2 JUL 1934"
+  const full = d.match(/^(\d{1,2})\s+([A-Z]{3})\s+(\d{4})$/);
+  if (full) return prefix + `${full[1].padStart(2,'0')}.${MON_TO_NUM[full[2]] || '00'}.${full[3]}`;
+  // Month+year: "JUL 1934"
+  const my = d.match(/^([A-Z]{3})\s+(\d{4})$/);
+  if (my) return prefix + `${MON_TO_NUM[my[1]] || '00'}.${my[2]}`;
+  // Year only: "1934"
+  if (/^\d{4}$/.test(d)) return prefix + d;
+  return gedDate; // return as-is if unrecognized
+}
+
+/** Convert German input format to GEDCOM date. "02.07.1934" → "2 JUL 1934" */
+function inputToGedcom(input) {
+  if (!input) return '';
+  let d = input.trim();
+  // Strip prefixes
+  let prefix = '';
+  const prefixMatch = d.match(/^(ABT|BEF|AFT|EST|CAL|ca\.?|vor|nach)\s+/i);
+  if (prefixMatch) {
+    const map = { 'ca': 'ABT', 'ca.': 'ABT', 'vor': 'BEF', 'nach': 'AFT' };
+    prefix = (map[prefixMatch[1].toLowerCase()] || prefixMatch[1].toUpperCase()) + ' ';
+    d = d.substring(prefixMatch[0].length);
+  }
+  // Full: "02.07.1934" or "2.7.1934"
+  const full = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (full) {
+    const day = parseInt(full[1]);
+    const mon = parseInt(full[2]);
+    if (mon < 1 || mon > 12 || day < 1 || day > 31) return null; // invalid
+    return prefix + `${day} ${NUM_TO_MON[mon]} ${full[3]}`;
+  }
+  // Month+year: "07.1934"
+  const my = d.match(/^(\d{1,2})\.(\d{4})$/);
+  if (my) {
+    const mon = parseInt(my[1]);
+    if (mon < 1 || mon > 12) return null;
+    return prefix + `${NUM_TO_MON[mon]} ${my[2]}`;
+  }
+  // Year only: "1934"
+  if (/^\d{4}$/.test(d)) return prefix + d;
+  // Already GEDCOM format? Pass through if it matches
+  if (/^\d{1,2}\s+[A-Z]{3}\s+\d{4}$/.test(d)) return prefix + d;
+  if (/^[A-Z]{3}\s+\d{4}$/.test(d)) return prefix + d;
+  return null; // invalid
+}
+
+/** Validate a date input field. Returns true if valid or empty. Sets visual feedback. */
+function validateDateField(inputEl) {
+  const val = inputEl.value.trim();
+  if (!val) { inputEl.style.borderColor = ''; return true; }
+  const result = inputToGedcom(val);
+  if (result === null) {
+    inputEl.style.borderColor = '#e94560';
+    return false;
+  }
+  inputEl.style.borderColor = '#4caf50';
+  return true;
+}
 import { geocode, collectPlaces } from './geocoder.js';
 import { MapView } from './map-view.js';
 
@@ -25,6 +98,7 @@ export class UI {
     this._setupSearch();
     this._setupHelp();
     this._setupSiblingsToggle();
+    this._setupEditDialog();
   }
 
   _setupSearch() {
@@ -379,7 +453,7 @@ export class UI {
       }
     }
 
-    html += `<div class="tooltip-name">${name}</div>`;
+    html += `<div class="tooltip-name"><span class="edit-icon" data-edit-id="${node.id}" title="Bearbeiten">&#9998;</span>${name}</div>`;
     if (lifespan) {
       const age = getAge(indi);
       const ageStr = age !== null ? ` (${age} Jahre)` : '';
@@ -600,6 +674,85 @@ export class UI {
         }
       });
     }
+  }
+
+  _setupEditDialog() {
+    const overlay = document.getElementById('edit-overlay');
+    const saveBtn = document.getElementById('edit-save-btn');
+    const cancelBtn = document.getElementById('edit-cancel-btn');
+
+    cancelBtn.addEventListener('click', () => { overlay.style.display = 'none'; });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.style.display = 'none'; });
+
+    const birthDateEl = document.getElementById('edit-birth-date');
+    const deathDateEl = document.getElementById('edit-death-date');
+
+    // Live validation on date fields
+    birthDateEl.addEventListener('input', () => validateDateField(birthDateEl));
+    deathDateEl.addEventListener('input', () => validateDateField(deathDateEl));
+
+    saveBtn.addEventListener('click', () => {
+      const id = document.getElementById('edit-person-id').value;
+      const indi = this.app.data?.individuals.get(id);
+      if (!indi) return;
+
+      // Validate dates
+      if (!validateDateField(birthDateEl) || !validateDateField(deathDateEl)) {
+        return; // don't save with invalid dates
+      }
+
+      indi.givenName = document.getElementById('edit-given').value.trim();
+      indi.surname = document.getElementById('edit-surname').value.trim();
+      indi.sex = document.getElementById('edit-sex').value;
+
+      // Convert dates from input format to GEDCOM format
+      const birthVal = birthDateEl.value.trim();
+      indi.birthDate = birthVal ? (inputToGedcom(birthVal) || birthVal) : '';
+      indi.birthPlace = document.getElementById('edit-birth-place').value.trim();
+
+      const deathVal = deathDateEl.value.trim();
+      indi.deathDate = deathVal ? (inputToGedcom(deathVal) || deathVal) : '';
+      indi.deathPlace = document.getElementById('edit-death-place').value.trim();
+
+      indi.occupation = document.getElementById('edit-occupation').value.trim();
+
+      overlay.style.display = 'none';
+
+      // Refresh view
+      this.app.selectPerson(this.app.currentRootId);
+    });
+
+    // Delegate click on edit icons (they appear dynamically in panels)
+    document.addEventListener('click', (e) => {
+      const editIcon = e.target.closest('.edit-icon');
+      if (!editIcon) return;
+      const personId = editIcon.dataset.editId;
+      if (!personId) return;
+      this._openEditDialog(personId);
+    });
+  }
+
+  _openEditDialog(personId) {
+    const indi = this.app.data?.individuals.get(personId);
+    if (!indi) return;
+
+    document.getElementById('edit-person-id').value = personId;
+    document.getElementById('edit-given').value = indi.givenName || '';
+    document.getElementById('edit-surname').value = indi.surname || '';
+    document.getElementById('edit-sex').value = indi.sex || '';
+
+    // Convert GEDCOM dates to German input format
+    const birthEl = document.getElementById('edit-birth-date');
+    const deathEl = document.getElementById('edit-death-date');
+    birthEl.value = gedcomToInput(indi.birthDate);
+    birthEl.style.borderColor = '';
+    document.getElementById('edit-birth-place').value = indi.birthPlace || '';
+    deathEl.value = gedcomToInput(indi.deathDate);
+    deathEl.style.borderColor = '';
+    document.getElementById('edit-death-place').value = indi.deathPlace || '';
+    document.getElementById('edit-occupation').value = indi.occupation || '';
+
+    document.getElementById('edit-overlay').style.display = 'flex';
   }
 
   // Legacy - kept for compatibility but now uses updateCenterInfo

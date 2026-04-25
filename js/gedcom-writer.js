@@ -14,9 +14,9 @@ export function exportGedcom(data, version = '5.5.1') {
 
   // --- HEAD ---
   lines.push('0 HEAD');
-  lines.push('1 SOUR HYPERANC');
+  lines.push('1 SOUR ROOTS');
   lines.push('2 VERS 1.0');
-  lines.push('2 NAME Hyperbolische Ahnentafel');
+  lines.push('2 NAME Roots Ancestry Viewer');
   const now = new Date();
   const dateStr = `${now.getDate()} ${['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'][now.getMonth()]} ${now.getFullYear()}`;
   lines.push(`1 DATE ${dateStr}`);
