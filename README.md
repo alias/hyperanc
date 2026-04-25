@@ -72,6 +72,50 @@ php -S localhost:8080
 
 > **Note:** Opening `index.html` directly via `file://` will not work due to ES module and fetch restrictions.
 
+### Deployment to a Web Host
+
+Only these files are needed for deployment — no build step required:
+
+```
+index.html
+css/
+  styles.css
+js/
+  main.js
+  gedcom-parser.js
+  gedcom-writer.js
+  file-io.js
+  tree-builder.js
+  hyperbolic-math.js
+  hyperbolic-layout.js
+  sibling-layout.js
+  renderer.js
+  interaction.js
+  timeline-view.js
+  tree-view.js
+  map-view.js
+  geocoder.js
+  ui.js
+```
+
+**Do not deploy:** `.ged` data files (private genealogy data), `.claude/`, `.git/`, `README.md`.
+
+**Optional:** Place a `.ged` file as `horst_bob.ged` in the root directory to auto-load on startup. Without it, the app shows a load dialog prompting the user to upload or enter a URL.
+
+**Host requirements:**
+- Any static web server (Apache, nginx, Caddy, shared hosting, GitHub Pages, Netlify, etc.)
+- HTTPS recommended (required by some browsers for Nominatim geocoding)
+- `.js` files must be served with MIME type `application/javascript` (default on most hosts)
+
+**Upload example:**
+```bash
+# Via SCP
+scp -r index.html css/ js/ user@host:/var/www/hyperanc/
+
+# Via rsync
+rsync -av --include='index.html' --include='css/***' --include='js/***' --exclude='*' . user@host:/var/www/hyperanc/
+```
+
 ### Loading Data
 
 The application loads `horst_bob.ged` by default on startup. To load a different file:

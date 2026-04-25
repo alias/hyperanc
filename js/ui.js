@@ -114,7 +114,13 @@ export class UI {
   }
 
   setFileName(name) {
-    this.rootName.textContent = name || '';
+    if (name) {
+      this.rootName.textContent = name;
+      this.rootName.style.color = '';
+    } else {
+      this.rootName.textContent = 'GEDCOM laden...';
+      this.rootName.style.color = '#e94560';
+    }
   }
 
   /**

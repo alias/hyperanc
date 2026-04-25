@@ -44,10 +44,14 @@ class App {
     // Try loading default file
     try {
       const response = await fetch('horst_bob.ged');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const text = await response.text();
+      // Verify it's actually a GEDCOM file (starts with "0 HEAD")
+      if (!text.trimStart().startsWith('0 HEAD')) throw new Error('Not a GEDCOM file');
       this.loadData(parseGedcom(text), 'horst_bob.ged');
     } catch (err) {
       console.log('No default GEDCOM found, showing load dialog');
+      if (this.ui) this.ui.setFileName('');
       this._showLoadDialog();
     }
   }
@@ -254,6 +258,7 @@ class App {
     const dropZone = document.getElementById('drop-zone');
 
     loadBtn.addEventListener('click', () => this._showLoadDialog());
+    document.getElementById('root-name').addEventListener('click', () => this._showLoadDialog());
 
     loadCloseBtn.addEventListener('click', () => {
       loadOverlay.style.display = 'none';
